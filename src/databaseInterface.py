@@ -13,7 +13,7 @@ from tkinter import ttk
 import os, sqlite3
 
 from .createDatabase import column_names
-from .setup import DB_FILE
+#from .setup import DB_FILE
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TABLE_ADDON_VERSION = "0.1.1"
@@ -25,7 +25,7 @@ class DatabaseInterface(tk.Toplevel):
 		self.minsize(x,y) if min else None
 		self.maxsize(x,y) if max else None
 	
-	def __init__(self, comment: str=""):
+	def __init__(self, db_file: str, comment: str=""):
 		super().__init__()
 		self.title(f"Database Viewer {comment}")
 		self.resizeWindow(830, 900)
@@ -33,12 +33,12 @@ class DatabaseInterface(tk.Toplevel):
 		main_frame=tk.Frame(self)
 		main_frame.pack(fill='both',expand=True)
 		
-		WindowContent(main_frame)
+		WindowContent(main_frame, db_file)
 
 
 class WindowContent(tk.Frame):
 	
-	def __init__(self,main_frame):
+	def __init__(self,main_frame, db_file: str):
 		super().__init__(main_frame)
 		
 		self.table_frame=tk.LabelFrame(main_frame,text="Table",height=540,width=780)
@@ -51,7 +51,7 @@ class WindowContent(tk.Frame):
 		self.option_frame.grid(column=1,row=1,sticky='wne',padx=25,pady=10,ipadx=10, ipady=10)
 		self.table_frame.grid(column=1,row=2,sticky='enw',padx=25,pady=10)
 
-		db_conn = sqlite3.connect(DB_FILE)
+		db_conn = sqlite3.connect(db_file)
 		self.cursor = db_conn.cursor()
 
 		self.optionsArea()

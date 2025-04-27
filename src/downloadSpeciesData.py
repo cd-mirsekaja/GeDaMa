@@ -10,12 +10,12 @@ This module extracts data from multiple sources:
 """
 
 # import libraries
-import requests, json
+import requests, json, configparser
 import wikipediaapi as wiki
 from Bio import Entrez
 from time import sleep
 
-from .setup import CONFIG_FILE
+from .configInterface import getSingleConfig
 
 def internetConnection():
 	"""
@@ -203,11 +203,12 @@ class GetInformation:
 				sciName (str): Scientific name of the species
 				accessionNumber (str): Accession number of the genome
 				getMissing (bool): Flag for getting the accession number from the NCBI Assembly
-				api_mail (str): mail adress for NCBI API
-				api_key (str): NCBI API key for increased rate limits
 		"""
 
 		self.log_function = log_function
+
+		api_info = getSingleConfig("API_OPTIONS")
+		print(api_info)
 
 		if arg_dict["sciName"]:
 			self.sciName = arg_dict["sciName"]
@@ -222,7 +223,7 @@ class GetInformation:
 			self.accessionNumber = arg_dict["accessionNumber"]
 		elif not arg_dict["accessionNumber"] and arg_dict["getMissing"]:
 			log_function("No accession number provided. Searching NCBI Assembly by scientific name...")
-			self.accessionNumber = self.getAccessionNumber(api_mail=arg_dict["api_mail"], api_key=arg_dict["api_key"])
+			self.accessionNumber = self.getAccessionNumber(api_info["ncbi_api_mail"], api_info["ncbi_api_key"])
 		else:
 			self.accessionNumber = ""
 		
@@ -266,6 +267,7 @@ class GetInformation:
 			Entrez.email = api_mail
 			Entrez.api_key = api_key
 			rate_increase = True
+			self.log_function("NCBI API information used for increased rates.")
 		else:
 			rate_increase = False
 
@@ -761,8 +763,6 @@ class ResolveData:
 				sciName (str): Scientific name of the species
 				accessionNumber (str): Accession number of the genome
 				getMissing (bool): Flag for getting the accession number from the NCBI Assembly
-				api_mail (str): mail adress for NCBI API
-				api_key (str): NCBI API key for increased rate limits
 		"""
 
 		if not arg_dict["sciName"] and not arg_dict["accessionNumber"]:
@@ -890,9 +890,7 @@ if __name__=="__main__":
 	search_dict = {
 				"sciName": testValues['sciNameList'][0],
 				"accessionNumber": testValues['accessionNumberList'][0],
-				"getMissing": True,
-				"api_mail": "",
-				"api_key": ""
+				"getMissing": True
 			}
 
 	data = ResolveData(search_dict)

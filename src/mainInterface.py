@@ -27,7 +27,7 @@ class DatabaseMakerInterface(tk.Toplevel):
 		self.minsize(x,y) if min else None
 		self.maxsize(x,y) if max else None
 	
-	def __init__(self, app_title: str, app_version: str=""):
+	def __init__(self, db_file: str, app_title: str, app_version: str=""):
 		super().__init__()
 		self.title(f'{app_title} {app_version}')
 		self.resizeWindow(1000, 550)
@@ -35,7 +35,7 @@ class DatabaseMakerInterface(tk.Toplevel):
 		self.main_frame = ttk.Frame(self)
 		self.main_frame.pack(fill='both', expand=True)
 		
-		WindowContent(self.main_frame, module=True)
+		WindowContent(self.main_frame, module=True, db_file=db_file)
 
 class MainInterface(tk.Tk):
 	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
@@ -56,7 +56,7 @@ class MainInterface(tk.Tk):
 
 class WindowContent(tk.Frame):
 	
-	def __init__(self, main_frame, module: bool=False):
+	def __init__(self, main_frame, module: bool=False, db_file: str=DB_FILE):
 		super().__init__(main_frame)
 		self.log_frame = ttk.LabelFrame(main_frame, text = "Log", border = 2, relief = "flat")
 		self.log_frame.pack(side = "right", padx = 20, pady = 20, fill = "both")
@@ -69,6 +69,8 @@ class WindowContent(tk.Frame):
 
 		self.current_thread = None
 		self.stop_event = threading.Event()
+
+		self.db_file = db_file
 
 		self.optionsArea()
 		self.speciesNameInput()
@@ -94,7 +96,7 @@ class WindowContent(tk.Frame):
 		# when appending and not overwriting, the IDX gets reset. Needs to be fixed.
 		self.db_append_onoff = tk.IntVar()
 		append_button=ttk.Checkbutton(self.general_options_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
-		self.db_append_onoff.set(0)
+		self.db_append_onoff.set(1)
 
 		self.itemsort_onoff = tk.IntVar()
 		ttk.Checkbutton(self.general_options_frame, text = "Sort output alphabetically", variable = self.itemsort_onoff, onvalue = 1, offvalue = 0)
@@ -260,7 +262,7 @@ class WindowContent(tk.Frame):
 					"getMissing": self.ncbi_search_onoff.get(),
 					"append_data": self.db_append_onoff.get()
 				}
-				sql = CreateDatabase(out_dict, self.updateLog, stop_event=self.stop_event)
+				sql = CreateDatabase(out_dict, db_file=self.db_file, log_function=self.updateLog, stop_event=self.stop_event)
 
 				if self.save_db_onoff.get() == 1:
 					self.updateLog("\n=== Now starting general data download ===")
@@ -286,7 +288,7 @@ class WindowContent(tk.Frame):
 				self.updateLog("\n--- Search cancelled. ---\n")
 
 		def _export_database():
-			if not os.path.isfile(DB_FILE):
+			if not os.path.isfile(self.db_file):
 				messagebox.showwarning("File missing", "No database file found!")
 				return
 
@@ -294,12 +296,12 @@ class WindowContent(tk.Frame):
 			if not filepath:
 				return
 			
-			shutil.copyfile(DB_FILE, filepath)
+			shutil.copyfile(self.db_file, filepath)
 		
 		# function for opening the database viewer
 		self.table_window_open=False
 		def _view_database():
-				if not os.path.isfile(DB_FILE):
+				if not os.path.isfile(self.db_file):
 					messagebox.showwarning("File missing", "No database file found!")
 					return
 
@@ -309,7 +311,7 @@ class WindowContent(tk.Frame):
 					self.table_window_open=False
 				
 				if not self.table_window_open:
-					self.table_window=DatabaseInterface()
+					self.table_window=DatabaseInterface(db_file=self.db_file)
 					self.table_window.protocol('WM_DELETE_WINDOW',lambda: onTableClose())
 					self.table_window_open=True
 				else:

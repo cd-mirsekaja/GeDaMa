@@ -10,7 +10,6 @@ This module creates the SQL library from extracted data.
 import pandas as pd
 import sqlite3, os
 from .downloadSpeciesData import ResolveData
-from .setup import CONFIG_FILE, DB_FILE
 
 
 column_names = {
@@ -88,7 +87,7 @@ def remove_nestings(input_list: list, output_list: list):
 	return(output_list)
 
 class CreateDatabase():
-	def __init__(self, value_dict: dict, log_function=print, stop_event=None):
+	def __init__(self, value_dict: dict, db_file: str, log_function=print, stop_event=None):
 		"""
 		Class for creating a SQLite database from extracted data.
 
@@ -101,6 +100,7 @@ class CreateDatabase():
 			log_function (function): Function for logging messages. Default is print.
 		"""
 
+		self.db_file = db_file
 		self.log_function = log_function
 		self.stop_event = stop_event
 		self.append_db_file = value_dict["append_data"]
@@ -126,9 +126,7 @@ class CreateDatabase():
 			search_dict = {
 				"sciName": sciName,
 				"accessionNumber": accessionNumber,
-				"getMissing": self.getMissing,
-				"api_mail": "",
-				"api_key": ""
+				"getMissing": self.getMissing
 			}
 			data = ResolveData(search_dict, log_function=self.log_function)
 			data_dict = data.combineDictionaries()
@@ -139,11 +137,14 @@ class CreateDatabase():
 		ids_table = pd.DataFrame(columns=column_names["ids"], index=self.idx_list)
 
 		# if data should be appended to an existing database, check if the file exists and get the last IDX
-		if os.path.isfile(DB_FILE) and self.append_db_file:
-			db_conn = sqlite3.connect(DB_FILE)
+		if os.path.isfile(self.db_file) and self.append_db_file:
+			db_conn = sqlite3.connect(self.db_file)
 			c = db_conn.cursor()
 			c.execute("SELECT IDX FROM taxonomy")
-			IDX_mod = max(c.fetchall())[0]+1
+			try:
+				IDX_mod = max(c.fetchall())[0]+1
+			except ValueError:
+				IDX_mod = 1
 			db_conn.close()
 		else:
 			IDX_mod = 0
@@ -197,17 +198,17 @@ class CreateDatabase():
 		table_dict = self.makeDataframes()
 
 		# remove database file if toggle is set to True, else print different statements
-		if os.path.isfile(DB_FILE):
+		if os.path.isfile(self.db_file):
 			if self.append_db_file:
 				self.log_function(f'\nDatabase already exists. Connecting...\n')
 			else:
-				os.remove(DB_FILE)
+				os.remove(self.db_file)
 				self.log_function(f'\nDatabase already exists. Removing and creating new file...\n')
 		else:
 			self.log_function(f'\nDatabase does not exist yet. Creating new file...\n')
 		
 		# establishes connection to the database and creating an empty file if there is none
-		db_conn = sqlite3.connect(DB_FILE)
+		db_conn = sqlite3.connect(self.db_file)
 		# creates new cursor object to interact with the database
 		c = db_conn.cursor()
 

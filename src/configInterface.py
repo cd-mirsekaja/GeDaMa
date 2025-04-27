@@ -6,7 +6,6 @@
 
 """
 
- 
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
@@ -21,9 +20,6 @@ CONFIG_KEYS = {
 	"API_OPTIONS": {
 		"NCBI_API_KEY": "",
 		"NCBI_API_MAIL": ""
-	},
-	"FILE_OPTIONS": {
-		"EXPORT_PATH": ""
 	}
 }
 
