@@ -6,11 +6,12 @@ Usage:
 """
 
 from setuptools import setup
+import os
 
 
 
 NAME = ['GeDaMa']
-VERSION = ['0.0.0']
+VERSION = ['0.2.1']
 APP = ['main.py']
 DATA_FILES = [
 	'species_database.db'
@@ -22,6 +23,9 @@ OPTIONS = {
 	
 	}
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = f"{SCRIPT_DIR}/data/config.ini"
+DB_FILE = f"{SCRIPT_DIR}/data/species_database.db"
 
 if __name__=='__main__':
 	setup(

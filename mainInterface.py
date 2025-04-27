@@ -8,7 +8,7 @@ This module constructs the main interface for the program.
 """
 
 # import various packages
-import os, shutil, threading, multiprocessing
+import os, shutil, threading
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
@@ -16,26 +16,44 @@ from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter import messagebox
 # import custom methods
 from createDatabase import CreateDatabase, DB_FILE
-from downloadSpeciesData import getAccessionNumbers, getScientificNames
-from databaseInterface import TableInterface
+from downloadSpeciesData import getScientificNames
+from databaseInterface import DatabaseInterface
+from optionsInterface import OptionsInterface, CONFIG_FILE, makeConfigFile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-class MainInterface(tk.Tk):
-	def resizeWindow(self, x: int, y: int):
+class MainInterfaceToplevel(tk.Toplevel):
+	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
 		self.geometry(f'{x}x{y}')
-		self.minsize(x,y)
-		self.maxsize(x,y)
+		self.minsize(x,y) if min else None
+		self.maxsize(x,y) if max else None
 	
-	def __init__(self, app_title: str, app_version: str):
+	def __init__(self, app_title: str, app_version: str=""):
 		super().__init__()
 		self.title(f'{app_title} {app_version}')
 		self.resizeWindow(1000, 550)
 
-		self.main_frame = tk.Frame(self)
+		self.main_frame = ttk.Frame(self)
 		self.main_frame.pack(fill='both', expand=True)
 		
 		WindowContent(self.main_frame)
+
+class MainInterface(tk.Tk):
+	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
+		self.geometry(f'{x}x{y}')
+		self.minsize(x,y) if min else None
+		self.maxsize(x,y) if max else None
+	
+	def __init__(self, app_title: str, app_version: str=""):
+		super().__init__()
+		self.title(f'{app_title} {app_version}')
+		self.resizeWindow(1000, 550)
+
+		self.main_frame = ttk.Frame(self)
+		self.main_frame.pack(fill='both', expand=True)
+		
+		WindowContent(self.main_frame)
+
 
 class WindowContent(tk.Frame):
 	
@@ -139,6 +157,25 @@ class WindowContent(tk.Frame):
 			("Markdown Files", ".md")
 			]
 
+		# function for opening the options window
+		self.options_window_open=False
+		def _view_config():
+				if not os.path.isfile(CONFIG_FILE):
+					messagebox.showwarning("File missing", "No config file found, empty file will be initialized.")
+					makeConfigFile()
+
+				# function for destroying the window after it has been closed
+				def onTableClose():
+					self.options_window.destroy()
+					self.options_window_open=False
+				
+				if not self.options_window_open:
+					self.options_window=OptionsInterface()
+					self.options_window.protocol('WM_DELETE_WINDOW',lambda: onTableClose())
+					self.options_window_open=True
+				else:
+					self.options_window.focus_set()
+		
 		# function for uploading a file to the data folder
 		def _upload_file():
 			filepath=askopenfilename(filetypes=textfile_types)
@@ -172,6 +209,10 @@ class WindowContent(tk.Frame):
 		def _reset():
 			self.text_field.delete(1.0, tk.END)
 
+
+		ttk.Separator(self.button_frame_right)
+		ttk.Button(self.button_frame_right, text = "Advanced Options", command = lambda: _view_config())
+		ttk.Separator(self.button_frame_right)
 		#ttk.Button(self.button_frame_right, text = "Upload Accession Numbers", command = lambda: _upload_file())
 		ttk.Button(self.button_frame_right, text = "Upload Text File", command = lambda: _open_file())
 		ttk.Button(self.button_frame_right, text = "Save Text File", command = lambda: _save_file())
@@ -245,7 +286,7 @@ class WindowContent(tk.Frame):
 				self.current_thread.join(timeout=0.5)
 				self.updateLog("\n--- Search cancelled. ---\n")
 
-		def _export_db():
+		def _export_database():
 			if not os.path.isfile(DB_FILE):
 				messagebox.showwarning("File missing", "No database file found!")
 				return
@@ -269,14 +310,14 @@ class WindowContent(tk.Frame):
 					self.table_window_open=False
 				
 				if not self.table_window_open:
-					self.table_window=TableInterface("")
+					self.table_window=DatabaseInterface()
 					self.table_window.protocol('WM_DELETE_WINDOW',lambda: onTableClose())
 					self.table_window_open=True
 				else:
 					self.table_window.focus_set()
 
 		# create buttons, listed in reverse order of appearance
-		ttk.Button(self.button_frame_middle, text = "Export Current Database", command = lambda: _export_db())
+		ttk.Button(self.button_frame_middle, text = "Export Current Database", command = lambda: _export_database())
 		ttk.Button(self.button_frame_middle, text = "View Current Database", command=lambda: _view_database())
 		ttk.Button(self.button_frame_middle, text = "Cancel Search", command=lambda: _cancel())
 		ttk.Button(self.button_frame_middle, text = "Confirm Search", command=lambda: _confirm())

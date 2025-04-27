@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Oct 25 12:58:07 2024
-
 @author: Ronja Rösner
+
+
 """
 
  
@@ -18,14 +18,14 @@ from createDatabase import column_names, DB_FILE
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TABLE_ADDON_VERSION = "0.1.1"
 
-class TableInterface(tk.Toplevel):
+class DatabaseInterface(tk.Toplevel):
 	
-	def resizeWindow(self,x: int, y: int):
+	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
 		self.geometry(f'{x}x{y}')
-		self.minsize(x,y)
-		self.maxsize(x,y)
+		self.minsize(x,y) if min else None
+		self.maxsize(x,y) if max else None
 	
-	def __init__(self, comment: str):
+	def __init__(self, comment: str=""):
 		super().__init__()
 		self.title(f"Database Viewer {comment}")
 		self.resizeWindow(830, 900)
@@ -62,7 +62,6 @@ class WindowContent(tk.Frame):
 		query=f"SELECT * FROM {selection}"
 		self.cursor.execute(query)
 		rows=self.cursor.fetchall()
-		self.tax_tree
 		self.tax_tree.config(columns=(column_names[selection]))
 		for i, col in enumerate(column_names[selection]):
 			self.tax_tree.heading(i, text=col)
@@ -150,7 +149,7 @@ class WindowContent(tk.Frame):
 
 
 if __name__ == "__main__":
-	table_window=TableInterface("[only for testing]")
+	table_window=DatabaseInterface("[only for testing]")
 	table_window.focus_set()
 	table_window.mainloop()
 

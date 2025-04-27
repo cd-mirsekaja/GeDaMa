@@ -10,11 +10,12 @@ This module extracts data from multiple sources:
 """
 
 # import libraries
-import os, requests, sqlite3, json
+import requests, json
 import wikipediaapi as wiki
 from Bio import Entrez
 from time import sleep
 
+from setup import CONFIG_FILE
 
 def internetConnection():
 	"""

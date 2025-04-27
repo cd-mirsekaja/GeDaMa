@@ -10,9 +10,10 @@ This module creates the SQL library from extracted data.
 import pandas as pd
 import sqlite3, os
 from downloadSpeciesData import ResolveData, internetConnection
+from setup import CONFIG_FILE, DB_FILE
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = f"{SCRIPT_DIR}/data/species_database.db"
+
 
 column_names = {
 			"taxonomy": [
