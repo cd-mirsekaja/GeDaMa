@@ -3,7 +3,7 @@
 
 from .mainInterface import MainInterface, DatabaseMakerInterface
 from .databaseInterface import DatabaseInterface
-from .optionsInterface import OptionsInterface, makeConfigFile
+from .configInterface import OptionsInterface, makeConfigFile
 
 from .downloadSpeciesData import getScientificNames, ResolveData
 from .createDatabase import CreateDatabase, column_names

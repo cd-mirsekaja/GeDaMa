@@ -10,9 +10,8 @@
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
-from tkinter.filedialog import asksaveasfilename
 from configparser import ConfigParser
-import os, sqlite3
+import os
 
 from .setup import CONFIG_FILE
 

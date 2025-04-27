@@ -10,11 +10,8 @@ import os, sys
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
-
 from src.mainInterface import MainInterface
 from src.setup import NAME, VERSION
-
-
 
 # turn the imported program info into strings
 program_name=str(NAME[0])

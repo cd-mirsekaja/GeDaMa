@@ -10,7 +10,6 @@
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
-from tkinter.filedialog import asksaveasfilename
 import os, sqlite3
 
 from .createDatabase import column_names
@@ -126,7 +125,6 @@ class WindowContent(tk.Frame):
 		self.query_field.grid(column=1,row=4,sticky='nwe',padx=10)
 
 		ttk.Button(self.option_frame,text="Execute Query",command=lambda: executeQuery(self.query_field.get())).grid(column=2,row=4,sticky='nwe',padx=10)
-
 		
 		y_scroll_text=ttk.Scrollbar(self.option_frame,orient='vertical')
 		y_scroll_text.grid(column=0,row=5,sticky='nes')

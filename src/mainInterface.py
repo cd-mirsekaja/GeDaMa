@@ -18,7 +18,7 @@ from tkinter import messagebox
 from .createDatabase import CreateDatabase
 from .downloadSpeciesData import getScientificNames
 from .databaseInterface import DatabaseInterface
-from .optionsInterface import OptionsInterface, makeConfigFile
+from .configInterface import OptionsInterface, makeConfigFile
 from .setup import CONFIG_FILE, DB_FILE, SCRIPT_DIR
 
 class DatabaseMakerInterface(tk.Toplevel):
@@ -35,7 +35,7 @@ class DatabaseMakerInterface(tk.Toplevel):
 		self.main_frame = ttk.Frame(self)
 		self.main_frame.pack(fill='both', expand=True)
 		
-		WindowContent(self.main_frame)
+		WindowContent(self.main_frame, module=True)
 
 class MainInterface(tk.Tk):
 	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
@@ -56,7 +56,7 @@ class MainInterface(tk.Tk):
 
 class WindowContent(tk.Frame):
 	
-	def __init__(self, main_frame):
+	def __init__(self, main_frame, module: bool=False):
 		super().__init__(main_frame)
 		self.log_frame = ttk.LabelFrame(main_frame, text = "Log", border = 2, relief = "flat")
 		self.log_frame.pack(side = "right", padx = 20, pady = 20, fill = "both")
