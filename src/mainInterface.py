@@ -14,13 +14,12 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter import messagebox
-# import custom methods
-from .createDatabase import CreateDatabase, DB_FILE
+
+from .createDatabase import CreateDatabase
 from .downloadSpeciesData import getScientificNames
 from .databaseInterface import DatabaseInterface
-from .optionsInterface import OptionsInterface, CONFIG_FILE, makeConfigFile
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from .optionsInterface import OptionsInterface, makeConfigFile
+from .setup import CONFIG_FILE, DB_FILE, SCRIPT_DIR
 
 class DatabaseMakerInterface(tk.Toplevel):
 	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
