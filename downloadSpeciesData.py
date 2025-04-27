@@ -15,7 +15,7 @@ import wikipediaapi as wiki
 from Bio import Entrez
 from time import sleep
 
-from setup import CONFIG_FILE
+from .setup import CONFIG_FILE
 
 def internetConnection():
 	"""

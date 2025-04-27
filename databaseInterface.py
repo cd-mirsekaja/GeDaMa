@@ -13,7 +13,7 @@ from tkinter import ttk
 from tkinter.filedialog import asksaveasfilename
 import os, sqlite3
 
-from createDatabase import column_names, DB_FILE
+from .createDatabase import column_names, DB_FILE
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TABLE_ADDON_VERSION = "0.1.1"

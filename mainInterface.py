@@ -15,10 +15,10 @@ from tkinter import ttk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter import messagebox
 # import custom methods
-from createDatabase import CreateDatabase, DB_FILE
-from downloadSpeciesData import getScientificNames
-from databaseInterface import DatabaseInterface
-from optionsInterface import OptionsInterface, CONFIG_FILE, makeConfigFile
+from .createDatabase import CreateDatabase, DB_FILE
+from .downloadSpeciesData import getScientificNames
+from .databaseInterface import DatabaseInterface
+from .optionsInterface import OptionsInterface, CONFIG_FILE, makeConfigFile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 

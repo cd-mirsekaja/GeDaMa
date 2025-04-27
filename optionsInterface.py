@@ -14,7 +14,7 @@ from tkinter.filedialog import asksaveasfilename
 from configparser import ConfigParser
 import os, sqlite3
 
-from setup import CONFIG_FILE
+from .setup import CONFIG_FILE
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_ADDON_VERSION = "0.0.0"
