@@ -22,7 +22,7 @@ from optionsInterface import OptionsInterface, CONFIG_FILE, makeConfigFile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-class MainInterfaceToplevel(tk.Toplevel):
+class DatabaseMakerInterface(tk.Toplevel):
 	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
 		self.geometry(f'{x}x{y}')
 		self.minsize(x,y) if min else None
