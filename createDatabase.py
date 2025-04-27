@@ -50,11 +50,6 @@ column_names = {
 			]
 		}
 
-def get_data(sciName: str, accessionNumber: str = ""):
-	data = ResolveData(sciName, accessionNumber)
-	data_dict = data.combineDictionaries()
-	return data_dict
-
 def infer_sqlite_type(dtype):
 	"""
 	Infers the SQLite column type from a pandas dtype.
@@ -94,8 +89,23 @@ def remove_nestings(input_list: list, output_list: list):
 	return(output_list)
 
 class CreateDatabase():
-	def __init__(self, value_dict: dict, log_function = print):
+	def __init__(self, value_dict: dict, log_function=print, stop_event=None):
+		"""
+		Class for creating a SQLite database from extracted data.
+
+		Args:
+			value_dict (dict): Dictionary containing a list of the following key-value pairs:
+				- "sciNameList" (list): List of scientific names of species.
+				- "accessionNumberList" (list): List of accession numbers for the species.
+				- "getMissing" (bool): Flag to indicate whether to get missing accession numbers from NCBI database.
+				- "append_data" (bool): Flag to indicate whether to append data to the existing database.
+			log_function (function): Function for logging messages. Default is print.
+		"""
+
 		self.log_function = log_function
+		self.stop_event = stop_event
+		self.append_db_file = value_dict["append_data"]
+		self.getMissing = value_dict["getMissing"]
 		self.sciNameList = value_dict["sciNameList"]
 		self.sciNameCount = len(self.sciNameList)
 		self.idx_list = range(0,self.sciNameCount)
@@ -103,21 +113,56 @@ class CreateDatabase():
 		# get the list of accession numbers. if it is shorter than the list of species, return a list of only None items
 		self.accNumberList = value_dict["accessionNumberList"] if len(value_dict["accessionNumberList"]) == self.sciNameCount else [None] * self.sciNameCount
 
-		
 	
 	def makeDataframes(self):
+		"""
+		Function for making dataframes from the downloaded data.
+		Creates three dataframes: taxonomy, traits, and ids.
+		Each dataframe contains the data for each species in the list.
+
+		Returns:
+			dict: Dictionary containing the generated dataframes.
+		"""
+		def _get_data(sciName: str, accessionNumber: str):
+			search_dict = {
+				"sciName": sciName,
+				"accessionNumber": accessionNumber,
+				"getMissing": self.getMissing,
+				"api_mail": "",
+				"api_key": ""
+			}
+			data = ResolveData(search_dict, log_function=self.log_function)
+			data_dict = data.combineDictionaries()
+			return data_dict
+		
 		taxonomy_table = pd.DataFrame(columns=column_names["taxonomy"], index=self.idx_list)
 		traits_table = pd.DataFrame(columns=column_names["traits"], index=self.idx_list)
 		ids_table = pd.DataFrame(columns=column_names["ids"], index=self.idx_list)
 
+		# if data should be appended to an existing database, check if the file exists and get the last IDX
+		if os.path.isfile(DB_FILE) and self.append_db_file:
+			db_conn = sqlite3.connect(DB_FILE)
+			c = db_conn.cursor()
+			c.execute("SELECT IDX FROM taxonomy")
+			IDX_mod = max(c.fetchall())[0]+1
+			db_conn.close()
+		else:
+			IDX_mod = 0
+
 		self.log_function(f"Downloading data for {self.sciNameCount} species...")
 		for IDX, sciName in enumerate(self.sciNameList):
-			self.log_function(f"[{IDX+1}] Downloading data for {sciName}...")
+			# set the database index to the current index + the last index
+			modified_IDX = IDX+IDX_mod
+			if self.stop_event and self.stop_event.is_set():
+				self.log_function("--- Download cancelled. ---\n")
+				break
 
-			data_dict = get_data(sciName, self.accNumberList[IDX])
+			self.log_function(f"[{IDX+1}] Downloading data for {sciName}...")
+			acc_number = self.accNumberList[IDX]
+			data_dict = _get_data(sciName, acc_number)
 			
 			taxonomy_data = [
-				IDX,
+				modified_IDX,
 				list(data_dict["Taxonomy"].values()),
 				list(data_dict["Vernaculars"].values())
 			]
@@ -125,14 +170,14 @@ class CreateDatabase():
 			taxonomy_table.iloc[IDX] = taxonomy_data
 
 			traits_data = [
-				IDX,
+				modified_IDX,
 				list(data_dict["Traits"].values())
 			]
 			traits_data = remove_nestings(traits_data, [])
 			traits_table.iloc[IDX] = traits_data
 
 			ids_data = [
-				IDX,
+				modified_IDX,
 				list(data_dict["IDs"].values())
 			]
 			ids_data = remove_nestings(ids_data, [])
@@ -145,14 +190,17 @@ class CreateDatabase():
 		}
 		return out_dict
 	
-	def makeSQL(self, append_db_file: bool = True):
+	def makeSQL(self):
+		"""
+		Function for creating a SQLite database from the dataframes.
+		"""
+
 		table_dict = self.makeDataframes()
 
 		# remove database file if toggle is set to True, else print different statements
 		if os.path.isfile(DB_FILE):
-			if append_db_file:
+			if self.append_db_file:
 				self.log_function(f'\nDatabase already exists. Connecting...\n')
-				
 			else:
 				os.remove(DB_FILE)
 				self.log_function(f'\nDatabase already exists. Removing and creating new file...\n')
@@ -167,7 +215,6 @@ class CreateDatabase():
 		for table_name, df in table_dict.items():
 			columns = ', '.join(f'"{col}" {infer_sqlite_type(dtype)}' for col, dtype in df.dtypes.items())
 			table_query = f"CREATE TABLE IF NOT EXISTS \"{table_name}\" ({columns})"
-
 			c.execute(table_query)
 
 			df.to_sql(table_name, db_conn, if_exists='append', index=False)
@@ -179,6 +226,7 @@ class CreateDatabase():
 
 
 if __name__ == "__main__":
+	
 	testValues = {
 		"sciNameList": [
 			"Oncorhynchus mykiss",
@@ -193,6 +241,7 @@ if __name__ == "__main__":
 	}
 	
 	print(f"Test Species: {testValues['sciNameList']}")
-
+	"""
 	sql = CreateDatabase(testValues)
 	sql.makeSQL()
+	"""

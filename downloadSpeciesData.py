@@ -11,7 +11,6 @@ This module extracts data from multiple sources:
 
 # import libraries
 import os, requests, sqlite3, json
-from pygbif import species as sp
 import wikipediaapi as wiki
 from Bio import Entrez
 from time import sleep
@@ -28,21 +27,46 @@ def internetConnection():
 		return False
 
 def restResponse(api_url: str):
-		"""
-		Function for saving a server response to a dictionary.
-		Returns a dictionary of strings.
-		"""
+	"""
+	Function for saving a server response to a dictionary.
+	Returns a dictionary of strings or None.
 
-		response = requests.get(api_url)
-		if response.status_code != 200:
-			return None
-		try:
-			response_data = response.json()
-			return response_data
-		except json.JSONDecodeError:
-			return None
+	Args:
+		api_url (str): base URL for the API
+	"""
+	response = requests.get(api_url)
+	if response.status_code != 200:
+		return None
+	try:
+		response_data = response.json()
+		return response_data
+	except json.JSONDecodeError:
+		return None
 
-def getAccessionNumbers(scientific_names, log_function=print, api_key=None, max_results=20):
+def speciesResponse(api_url: str, spec_id: str, rest_mod: str="", list_level: int=0):
+	"""
+	Function for saving the server response for a species specific API call.
+
+	Args:
+		api_url (str): base URL for the API
+		spec_id (str): ID or name of the species
+		rest_mod (str): additional URL suffix
+		list_level (int): amount of nested lists in the response data
+	Returns:
+		dict: {key: str} or empty dict
+	"""
+	list_index = ''.join('[0]' for _ in range(list_level))
+	api_url = (f"{api_url}{spec_id}{rest_mod}")
+	response = restResponse(api_url)
+	try:
+		response_data = response
+		out_dict = eval(f"response_data{list_index}")
+	except TypeError:
+		out_dict = {}
+
+	return out_dict
+
+def getAccessionNumbers(scientific_names: list, log_function=print, stop_event=None, max_results: int=20, api_key: str=None, api_mail: str=""):
 	"""
 	Retrieves the best genome accession (RefSeq preferred) from NCBI Assembly.
 	This function was written with the help of Perplexity AI Sonar.
@@ -50,18 +74,23 @@ def getAccessionNumbers(scientific_names, log_function=print, api_key=None, max_
 	Args:
 		scientific_names (list): Organism scientific names
 		api_key (str): NCBI API key for rate limits
+		api_mail (str): NCBI email for rate limits
 		max_results (int): Max assemblies to check per species
 	
 	Returns:
 		dict: {organism: [best_accession] or empty list}
 	"""
-	Entrez.email = "your_email@example.com"
+	Entrez.email = api_mail
 	if api_key:
 		Entrez.api_key = api_key
 	
 	accessions = {}
 	log_function(f"Looking up Accessions for {len(scientific_names)} species...")
 	for IDX, name in enumerate(scientific_names):
+		if stop_event and stop_event.is_set():
+			log_function("\--- Search cancelled. ---\n")
+			return accessions, list(accessions.values())
+		
 		log_function(f"[{IDX+1}] Searching for {name}...")
 		try:
 			# Get Taxonomy ID
@@ -125,207 +154,313 @@ def getAccessionNumbers(scientific_names, log_function=print, api_key=None, max_
 		except Exception as e:
 			print(f"Error processing {name}: {str(e)}")
 			accessions[name] = []
-	
+
 	accessions_list = list(accessions.values())
 	return accessions, accessions_list
 
-def getScientificNames(acc_numbers: list, log_function=print):
-	API_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/"
-	url_seg_accession = "genome/accession/"
+def getScientificNames(acc_numbers: list, log_function=print, stop_event=None):
+	"""
+	Function for retrieving the scientific names for a list of genome accession numbers from the NCBI Assembly database.
+
+	Args:
+		acc_numbers (list): List of genome accession numbers
+		log_function (function): Function for logging messages (default: print)
+	Returns:
+		dict: {accession_number: scientific_name} or empty dict
+	"""
+
+	rest_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/"
+	rest_mod = "/dataset_report"
 
 	log_function(f"Looking up Scientific Names for {len(acc_numbers)} genomes...")
-	sci_names = {}
+	sci_names_dict = {}
 	for IDX, acc_number in enumerate(acc_numbers):
-		dataset_response = requests.get(API_URL+url_seg_accession+acc_number+"/dataset_report")
-		if dataset_response.status_code == 200:
-			sci_name = dataset_response.json()["reports"][0]["organism"]["organism_name"]
-			sci_names[acc_number] = sci_name
+		if stop_event and stop_event.is_set():
+			log_function("\--- Search cancelled. ---\n")
+			return sci_names_dict
+		
+		dataset_response = speciesResponse(rest_URL, acc_number, rest_mod)
+		try:
+			sci_name = dataset_response["reports"][0]["organism"]["organism_name"]
+			sci_names_dict[acc_number] = sci_name
 			log_function(f"[{IDX+1}] {sci_name} found for {acc_number}")
-		else:
-			sci_names[acc_number] = ""
+		except:
+			sci_names_dict[acc_number] = ""
 			log_function(f"[{IDX+1}] No name found for {acc_number}")
-	
-	sci_names_list = list(sci_names.values())
-	return sci_names, sci_names_list
-	
 
-def getIdentification(sciName: str, accessionNumber: str):
-	sciNameMod = '%20'.join(sciName.split())
-
-	rest_url = "https://www.irmng.org/rest/IRMNG_IDByName/"
-	api_url = (rest_url+sciNameMod)
-	irmng_id = restResponse(api_url)
-
-	rest_url = "https://www.eu-nomen.eu/portal/rest/PESIGUIDByName/"
-	api_url = (rest_url+sciNameMod)
-	guid_id = restResponse(api_url)
-
-	rest_url = "https://www.marinespecies.org/rest/AphiaIDByName/"
-	rest_mod = "?marine_only=false&extant_only=false"
-	api_url = (rest_url+sciNameMod+rest_mod)
-	aphia_id = restResponse(api_url)
-
-	gbif_usageKey = sp.name_backbone(sciName)['usageKey']
-
-	id_dict = {
-		"AccessionNumber": accessionNumber,
-		"GBIF-UsageKey": gbif_usageKey,
-		"IRMNG-ID": irmng_id,
-		"AphiaID": aphia_id,
-		"PESI-GUID": guid_id
-	}
-	return id_dict
-
-def getResponses(sciName: str, accessionNumber: str):
-	"""
-		Function for saving the server responses to all API calls. Calls to:
-		- World Register of Marine Species (WORMS)
-		- Interim Register of Marine and Nonmarine Genera (IRMNG)
-		- Global Biodiversity Information Facility (GBIF)
-		- Pan-European Species directories Infrastructure (PESI)
-		- Wikipedia
-
-		Returns a dictionary of dictionaries.
-		"""
-	
-	sciNameMod = '%20'.join(sciName.split())
-	id_dict = getIdentification(sciName, accessionNumber)
-
-	# get GBIF response
-	rest_url = "https://api.gbif.org/v1/species/"
-	api_url = (f"{rest_url}{id_dict['GBIF-UsageKey']}")
-	response = restResponse(api_url)
-	try:
-		gbif_response = response
-	except TypeError:
-		gbif_response = {}
-
-	# get IRMNG response
-	rest_url = "https://www.irmng.org/rest/AphiaRecordsByMatchNames?scientificnames%5B%5D="
-	api_url = (rest_url+sciNameMod)
-	response = restResponse(api_url)
-	try:
-		irmng_response = response[0][0]
-	except TypeError:
-		irmng_response = {}
-
-	# get PESI response
-	rest_url = "https://www.eu-nomen.eu/portal/rest/PESIRecordsByMatchTaxon/"
-	api_url = (rest_url+sciNameMod)
-	response = restResponse(api_url)
-	try:
-		pesi_response = response[0]
-	except TypeError:
-		pesi_response = {}
-
-	# get WORMS response
-	rest_url = "https://www.marinespecies.org/rest/AphiaRecordsByNames?scientificnames%5B%5D="
-	rest_mod = "&like=false&marine_only=false&extant_only=false"
-	api_url = (rest_url+sciNameMod+rest_mod)
-	response = restResponse(api_url)
-	try:
-		worms_response = response[0][0]
-	except TypeError:
-		worms_response = {}
-	
-	# get GBIF vernaculars
-	def _gbif_vernaculars():
-		base_url="https://api.gbif.org/v1/species/"
-		rest_service="/vernacularNames"
-		api_url=(f"{base_url}{id_dict['GBIF-UsageKey']}{rest_service}")
-		response = restResponse(api_url)
-		try:
-			gbif_ver_response = response
-		except TypeError:
-			gbif_ver_response = {}
-
-		if gbif_ver_response!=None:
-			engver_list = [result["vernacularName"] for result in gbif_ver_response["results"] if result["language"] == "eng"]
-			gerver_list = [result["vernacularName"] for result in gbif_ver_response["results"] if result["language"] == "deu"]
-		else:
-			engver_list = []
-			gerver_list = []
-
-		if engver_list==[]:
-			eng_out = ""
-		else:
-			eng_out = str(engver_list[0])
-		
-		if gerver_list == []:
-			ger_out = ""
-		else:
-			ger_out = str(gerver_list[0])
-
-		return {"English": eng_out, "German": ger_out}
-	
-	# get WORMS vernaculars
-	def _worms_vernaculars():
-		base_url = "https://www.marinespecies.org/rest/AphiaVernacularsByAphiaID/"
-		api_url = (f"{base_url}{id_dict['AphiaID']}")
-		response = restResponse(api_url)
-		try:
-			worms_ver_response = response
-		except TypeError:
-			worms_ver_response = {}
-
-		if worms_ver_response!=None:
-			engver_list = [entry["vernacular"] for entry in worms_ver_response if entry["language_code"] == "eng" or entry["language"] == "English"]
-			gerver_list = [entry["vernacular"] for entry in worms_ver_response if entry["language_code"] == "deu" or entry["language"] == "German"]
-		else:
-			engver_list = []
-			gerver_list = []
-		
-		if engver_list == []:
-			eng_out = ""
-		else:
-			eng_out = str(engver_list[0])
-
-		if gerver_list == []:
-			ger_out = ""
-		else:
-			ger_out = str(gerver_list[0])
-
-		return {"English": eng_out, "German": ger_out}
-	
-	def _wikipedia_vernaculars(sciName: str):
-		wiki_en = wiki.Wikipedia('VernacularData','en')
-		wiki_de = wiki.Wikipedia('VernacularData','de')
-
-		if wiki_en.page(sciName).exists():
-			pagetitle_en=wiki_en.page(sciName).displaytitle
-			if "<i>" in pagetitle_en:
-				pagetitle_en = ""
-		else:
-			pagetitle_en = ""
-
-		if wiki_de.page(sciName).exists():
-			pagetitle_de=wiki_de.page(sciName).displaytitle
-			if "<i>" in pagetitle_de:
-				pagetitle_de = ""
-		else:
-			pagetitle_de = ""
-			
-		return {"English": pagetitle_en, "German": pagetitle_de}
-
-	# combine all responses into a dictionary and return it
-	data_dict = {
-		"WORMS": worms_response,
-		"GBIF": gbif_response,
-		"IRMNG": irmng_response,
-		"PESI": pesi_response,
-		"WORMS-Vernaculars": _worms_vernaculars(),
-		"GBIF-Vernaculars": _gbif_vernaculars(),
-		"Wikipedia-Vernaculars": _wikipedia_vernaculars(sciName)
-	}
-	return data_dict
-
+	sci_names_dict["all"] = list(sci_names_dict.values())
+	return sci_names_dict
 
 class GetInformation:
-	def __init__(self, sciName: str, accessionNumber: str):
-		self.response_dict = getResponses(sciName, accessionNumber)
-		self.id_dict = getIdentification(sciName, accessionNumber)
+	def __init__(self, log_function, arg_dict: dict):
+		"""
+		Class for retrieving information on one species from multiple sources.
+
+		Args:
+			log_function (function): Function for logging messages
+			arg_dict (dict): Dictionary with the following key-value pairs:
+				sciName (str): Scientific name of the species
+				accessionNumber (str): Accession number of the genome
+				getMissing (bool): Flag for getting the accession number from the NCBI Assembly
+				api_mail (str): mail adress for NCBI API
+				api_key (str): NCBI API key for increased rate limits
+		"""
+
+		self.log_function = log_function
+
+		if arg_dict["sciName"]:
+			self.sciName = arg_dict["sciName"]
+		elif not arg_dict["sciName"] and arg_dict["accessionNumber"]:
+			log_function("No scientific name provided. Searching for name by accession number...")
+			self.sciName = self.getSciName(arg_dict["accessionNumber"])
+		else:
+			log_function("No scientific name found or provided.")
+			self.sciName = ""
+
+		if arg_dict["accessionNumber"]:
+			self.accessionNumber = arg_dict["accessionNumber"]
+		elif not arg_dict["accessionNumber"] and arg_dict["getMissing"]:
+			log_function("No accession number provided. Searching NCBI Assembly by scientific name...")
+			self.accessionNumber = self.getAccessionNumber(api_mail=arg_dict["api_mail"], api_key=arg_dict["api_key"])
+		else:
+			self.accessionNumber = ""
+		
+		self.response_dict = self.getResponses()
 	
-	# function for retrieving the taxonomic path from GBIF
+	def getSciName(self, accessionNumber: str):
+		"""
+		Function for getting the scientific name of a NCBI Accession number.
+
+		Args:
+			accessionNumber (str): Accession number of the genome
+
+		Returns:
+			str: Scientific name of the species
+		"""
+		rest_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/"
+		rest_mod = "/dataset_report"
+		dataset_response = speciesResponse(rest_URL, accessionNumber, rest_mod)
+		try:
+			sci_name = dataset_response["reports"][0]["organism"]["organism_name"]
+			self.log_function(f"{sci_name} found for {accessionNumber}")
+		except:
+			sci_name = ""
+			self.log_function(f"No name found for {accessionNumber}")
+		
+		return sci_name
+	
+	def getAccessionNumber(self, api_mail: str="", api_key: str="", max_results: int=20):
+		"""
+		Function for getting the best accession number for one scientific name from the NCBI Assembly database.
+
+		Args:
+			api_mail (str): NCBI email adress for increased rate limits. Default in None.
+			api_key (str): NCBI API key for increased rate limits. Default in None.
+			max_results (int): Max number of assemblies to check per species. Default is 20.
+		Returns:
+			str: Accession number of one genome assembly
+		"""
+
+		if api_key and api_mail:
+			Entrez.email = api_mail
+			Entrez.api_key = api_key
+			rate_increase = True
+		else:
+			rate_increase = False
+
+		def _unsuccessful():
+			self.log_function("No Accession Number found.")
+			return ""
+		
+		acc_number = ""
+		self.log_function(f"Searching for {self.sciName}...")
+		try:
+			# Get Taxonomy ID
+			tax_handle = Entrez.esearch(db="taxonomy", term=self.sciName, retmax=1)
+			tax_data = Entrez.read(tax_handle, validate=False)
+			tax_handle.close()
+			
+			if not tax_data["IdList"]:
+				return _unsuccessful()
+				
+			tax_id = tax_data["IdList"][0]
+			
+			# Search Assembly database
+			assembly_handle = Entrez.esearch(
+				db="assembly",
+				term=f"txid{tax_id}[Organism]",
+				retmax=max_results,
+				sort="date desc"  # Get newest first
+			)
+			assembly_data = Entrez.read(assembly_handle, validate=False)
+			assembly_handle.close()
+			
+			assembly_ids = assembly_data["IdList"]
+			if not assembly_ids:
+				return _unsuccessful()
+
+			# Fetch assembly details
+			best_acc = None
+			for assembly_id in assembly_ids:
+				self.log_function(f"Testing assembly {assembly_id}...")
+				summary_handle = Entrez.esummary(
+					db="assembly", 
+					id=assembly_id,
+					retmode="xml"
+				)
+				summary = Entrez.read(summary_handle, validate=False)
+				summary_handle.close()
+				
+				ds = summary["DocumentSummarySet"]["DocumentSummary"][0]
+				primary_acc = str(ds["AssemblyAccession"])
+				
+				# Priority 1: RefSeq accession
+				if primary_acc.startswith("GCF_"):
+					best_acc = primary_acc
+					break
+				
+				# Priority 2: Most recent GenBank
+				if not best_acc and primary_acc.startswith("GCA_"):
+					best_acc = primary_acc
+				
+				# wait for NCBI API rate limit
+				if not rate_increase:
+					sleep(0.34)
+				else:
+					sleep(0.1)
+
+			acc_number = best_acc if best_acc else ""
+			if acc_number != "":
+				self.log_function(f"Accession {acc_number} found!")
+			else:
+				self.log_function("No Accession Number found.")
+			
+		except Exception as e:
+			print(f"Error processing {self.sciName}: {str(e)}")
+			acc_number = ""
+
+		return acc_number
+
+	# function for retrieving the server responses from all API calls
+	def getResponses(self):
+		"""
+			Function for saving the server responses to all API calls. Calls to:
+			- World Register of Marine Species (WORMS)
+			- Interim Register of Marine and Nonmarine Genera (IRMNG)
+			- Global Biodiversity Information Facility (GBIF)
+			- Pan-European Species directories Infrastructure (PESI)
+			- Wikipedia
+
+			Returns a dictionary of dictionaries.
+			"""
+		
+		sciname_mod = '%20'.join(self.sciName.split())
+
+		def _general_vernaculars(platform: str, base_url: str, spec_id: str, rest_mod: str=""):
+			response = speciesResponse(base_url, spec_id, rest_mod)
+
+			if response!=None:
+				if platform == "WORMS":
+					engver_list = [entry["vernacular"] for entry in response if entry["language_code"] == "eng" or entry["language"] == "English"]
+					gerver_list = [entry["vernacular"] for entry in response if entry["language_code"] == "deu" or entry["language"] == "German"]
+				elif platform == "GBIF":
+					engver_list = [result["vernacularName"] for result in response["results"] if result["language"] == "eng"]
+					gerver_list = [result["vernacularName"] for result in response["results"] if result["language"] == "deu"]
+				else:
+					engver_list = []
+					gerver_list = []
+			else:
+				engver_list = []
+				gerver_list = []
+			
+			eng_out = str(engver_list[0]) if engver_list != [] else ""
+			ger_out = str(gerver_list[0]) if gerver_list != [] else ""
+
+			return {"English": eng_out, "German": ger_out}
+		
+		# get Wikipedia page titles for vernaculars
+		def _wikipedia_vernaculars():
+			wiki_en = wiki.Wikipedia('VernacularData','en')
+			wiki_de = wiki.Wikipedia('VernacularData','de')
+
+			if wiki_en.page(self.sciName).exists():
+				pagetitle_en=wiki_en.page(self.sciName).displaytitle
+				if "<i>" in pagetitle_en:
+					pagetitle_en = ""
+			else:
+				pagetitle_en = ""
+
+			if wiki_de.page(self.sciName).exists():
+				pagetitle_de=wiki_de.page(self.sciName).displaytitle
+				if "<i>" in pagetitle_de:
+					pagetitle_de = ""
+			else:
+				pagetitle_de = ""
+			
+			return {"English": pagetitle_en, "German": pagetitle_de}
+
+		id_dict = self.getIdentification()
+
+		GBIF_url = "https://api.gbif.org/v1/species/"
+		GBIF_vern_mod="/vernacularNames"
+		IRMNG_url = "https://www.irmng.org/rest/AphiaRecordsByMatchNames?scientificnames%5B%5D="
+		PESI_url = "https://www.eu-nomen.eu/portal/rest/PESIRecordsByMatchTaxon/"
+		WORMS_url = "https://www.marinespecies.org/rest/AphiaRecordsByNames?scientificnames%5B%5D="
+		WORMS_mod = "&like=false&marine_only=false&extant_only=false"
+		WORMS_vern_url = "https://www.marinespecies.org/rest/AphiaVernacularsByAphiaID/"
+
+		# combine all responses into a dictionary and return it
+		data_dict = {
+			"WORMS": speciesResponse(WORMS_url, sciname_mod, WORMS_mod, list_level=2),
+			"GBIF": speciesResponse(GBIF_url, str(id_dict["GBIF-UsageKey"])),
+			"IRMNG": speciesResponse(IRMNG_url, sciname_mod, list_level=2),
+			"PESI": speciesResponse(PESI_url, sciname_mod, list_level=1),
+			"WORMS-Vernaculars": _general_vernaculars("WORMS", WORMS_vern_url, str(id_dict["AphiaID"])),
+			"GBIF-Vernaculars": _general_vernaculars("GBIF", GBIF_url, str(id_dict["GBIF-UsageKey"]), GBIF_vern_mod),
+			"Wikipedia-Vernaculars": _wikipedia_vernaculars(),
+			"IDs": id_dict
+		}
+		return data_dict
+
+	# function for retrieving identification numbers for different database providers
+	def getIdentification(self):
+		"""
+		Function for retrieving identification numbers for different database providers.
+		
+		Args:
+			sciName (str): Scientific name of the species
+			accessionNumber (str): Accession number of the genome
+		Returns:
+			dict: {provider: ID}
+		"""
+
+		sciname_mod = '%20'.join(self.sciName.split())
+
+		irmng_url = "https://www.irmng.org/rest/IRMNG_IDByName/"
+		pesi_url = "https://www.eu-nomen.eu/portal/rest/PESIGUIDByName/"
+		worms_url = "https://www.marinespecies.org/rest/AphiaIDByName/"
+		worms_mod = "?marine_only=false&extant_only=false"
+		gbif_url = "https://api.gbif.org/v1/species?name="
+		gbif_mod = "&offset=0&limit=1"
+		
+		irmng_id = speciesResponse(irmng_url, sciname_mod)
+		guid_id = speciesResponse(pesi_url, sciname_mod)
+		aphia_id = speciesResponse(worms_url, sciname_mod, worms_mod)
+		try:
+			gbif_usageKey = speciesResponse(gbif_url, sciname_mod, gbif_mod)["results"][0]["key"]
+		except:
+			gbif_usageKey = ""
+
+		id_dict = {
+			"AccessionNumber": self.accessionNumber,
+			"GBIF-UsageKey": gbif_usageKey,
+			"IRMNG-ID": irmng_id,
+			"AphiaID": aphia_id,
+			"PESI-GUID": guid_id
+		}
+		return id_dict
+
+	# function for parsing the taxonomic path from GBIF
 	def gbifTaxpath(self):
 		"""
 		Function for getting the taxnonomic data from the GBIF response.
@@ -350,7 +485,8 @@ class GetInformation:
 			if gbif_data["rank"] == "SPECIES":
 				if 'scientificName' in gbif_data:
 					tspecies = gbif_data['scientificName'].split(" ",2)[1]
-					tauthority = gbif_data['scientificName'].split(" ",2)[2]
+					if len(gbif_data['scientificName'].split(" ",2)) == 3:
+						tauthority = gbif_data['scientificName'].split(" ",2)[2]
 				if 'species' in gbif_data:
 					tsciName = gbif_data['species']
 			
@@ -367,7 +503,7 @@ class GetInformation:
 			}
 		return out_dict
 	
-	# function for retrieving the taxonomic path from IRMNG
+	# function for parsing the taxonomic path from IRMNG
 	def irmngTaxpath(self):
 		"""
 		Function for getting the taxnonomic data from the IRMNG response.
@@ -409,7 +545,7 @@ class GetInformation:
 			}
 		return out_dict
 	
-	# function for retrieving the taxonomic path from PESI
+	# function for parsing the taxonomic path from PESI
 	def pesiTaxpath(self):
 		"""
 		Function for getting the taxnonomic data from the PESI response.
@@ -451,6 +587,7 @@ class GetInformation:
 			}
 		return out_dict
 
+	# function for parsing the taxonomic path from WORMS
 	def wormsTaxpath(self):
 		"""
 		Function for getting the taxnonomic data from the WORMS response.
@@ -492,6 +629,7 @@ class GetInformation:
 			}
 		return out_dict
 
+	# function for parsing trait information from IRMNG
 	def irmngTraits(self):
 		"""
 		Function for getting the trait data from the IRMNG response.
@@ -534,6 +672,7 @@ class GetInformation:
 			}
 		return out_dict
 
+	# function for parsing trait information from WORMS
 	def wormsTraits(self):
 		"""
 		Function for getting the trait data from the WORMS response.
@@ -576,6 +715,7 @@ class GetInformation:
 			}
 		return out_dict
 
+	# function for parsing vernacular names from multiple sources
 	def allVernaculars(self):
 		ver_dict = {
 			"Wikipedia": self.response_dict["Wikipedia-Vernaculars"],
@@ -584,6 +724,7 @@ class GetInformation:
 		}
 		return ver_dict
 
+	# function for combining all internal dictionaries into one single dictionary
 	def combineDictionaries(self):
 		"""
 		Function for combining all relevant dictionaries into one single dict.
@@ -601,20 +742,41 @@ class GetInformation:
 				"WORMS": self.wormsTraits(),
 				"IRMNG": self.irmngTraits()
 			},
-			"IDs": self.id_dict
+			"IDs": self.response_dict["IDs"]
 		}
 		return(combined_dict)
 
 class ResolveData:
-	def __init__(self, sciName: str, accessionNumber: str = ""):
-		search = GetInformation(sciName, accessionNumber)
+	def __init__(self, arg_dict: dict, log_function=print):
+		"""
+		Class for resolving and combining the data retrieved by the internal GetInformation class.
+		Requires one or both of the following arguments inside the arg_dict:
+			sciName (str): Scientific name of the species
+			accessionNumber (str): Accession number of the genome
+
+		Args:
+			log_function (function): Function for logging messages
+			arg_dict (dict): Dictionary with the following key-value pairs:
+				sciName (str): Scientific name of the species
+				accessionNumber (str): Accession number of the genome
+				getMissing (bool): Flag for getting the accession number from the NCBI Assembly
+				api_mail (str): mail adress for NCBI API
+				api_key (str): NCBI API key for increased rate limits
+		"""
+
+		if not arg_dict["sciName"] and not arg_dict["accessionNumber"]:
+			log_function("No scientific name or accession number provided.")
+			return
+
+		search = GetInformation(log_function, arg_dict)
 		self.data_dict = search.combineDictionaries()
 	
 	def resolveTaxonomy(self):
 		"""
 		Resolves the taxonomy dictionary by iterating over the keys one by one.
 		If no WORMS data is available, the next key is tried, and so forth.
-		Returns a dictionary with the resolved data. Dict is empty if no data is available.
+		Returns:
+			dict: A dictionary containing the resolved taxonomic data or an empty dictionary
 		"""
 		tax_dict = self.data_dict["Taxonomy"]
 		# get keys from the first subdictionary (excluding 'Vernaculars')
@@ -704,13 +866,14 @@ class ResolveData:
 		return(resolved_dict)
 
 if __name__=="__main__":
+
 	# cannot deal with subspecies right now
-	testSciName = "Oncorhynchus mykiss"
 	testValues = {
 		"sciNameList": [
 			"Oncorhynchus mykiss",
 			"Calidris alpina",
-			"Anguilla anguilla"
+			"Anguilla anguilla",
+			"Gorilla gorilla"
 		],
 		"accessionNumberList": [
 			"GCF_002163495.1",
@@ -720,19 +883,25 @@ if __name__=="__main__":
 	}
 	print(f"Test Species: {testValues['sciNameList'][0]}")
 
-	getScientificNames(testValues["accessionNumberList"])
+	#names = getScientificNames(testValues["accessionNumberList"])
+	#print(names["all"])
 
-	#data = ResolveData(testSciName)
-	#print(data.combineDictionaries())
-	#print("\n")
+	search_dict = {
+				"sciName": testValues['sciNameList'][0],
+				"accessionNumber": testValues['accessionNumberList'][0],
+				"getMissing": True,
+				"api_mail": "",
+				"api_key": ""
+			}
+
+	data = ResolveData(search_dict)
+	print(data.combineDictionaries())
+	print("\n")
 
 	#search = GetInformation(testSciName)
 	#print(search.combineDictionaries())
 	#print("\n")
-
-
-
-
+	
 
 
 

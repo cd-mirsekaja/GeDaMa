@@ -8,7 +8,7 @@ This module constructs the main interface for the program.
 """
 
 # import various packages
-import os, shutil, threading
+import os, shutil, threading, multiprocessing
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
@@ -50,6 +50,9 @@ class WindowContent(tk.Frame):
 		self.options_frame = ttk.LabelFrame(main_frame, text = "Options", border = 2, relief = "solid")
 		self.options_frame.pack(side = "left", padx = 20, pady = 20, fill = "both")
 
+		self.current_thread = None
+		self.stop_event = threading.Event()
+
 		self.optionsArea()
 		self.speciesNameInput()
 		self.logOutput()
@@ -58,16 +61,22 @@ class WindowContent(tk.Frame):
 		self.general_options_frame = ttk.Frame(self.options_frame)
 		self.general_options_frame.pack(side = "top", fill = "x", pady = 10)
 
+		def _switch_state(widget):
+			if self.save_db_onoff.get() == 1:
+				widget.configure(state="normal")
+			else:
+				widget.configure(state="disabled")
+		
 		self.button_frame_right = ttk.Frame(self.options_frame)
 		self.button_frame_right.pack(side = "bottom", fill = "x", pady = 10)
 
 		self.save_db_onoff = tk.IntVar()
-		ttk.Checkbutton(self.general_options_frame, text = "Save output to database file", variable = self.save_db_onoff, onvalue = 1, offvalue = 0)
+		ttk.Checkbutton(self.general_options_frame, text = "Save output to database file", variable = self.save_db_onoff, onvalue = 1, offvalue = 0, command=lambda: _switch_state(append_button))
 		self.save_db_onoff.set(1)
 
 		# when appending and not overwriting, the IDX gets reset. Needs to be fixed.
 		self.db_append_onoff = tk.IntVar()
-		ttk.Checkbutton(self.general_options_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
+		append_button=ttk.Checkbutton(self.general_options_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
 		self.db_append_onoff.set(0)
 
 		self.itemsort_onoff = tk.IntVar()
@@ -97,7 +106,6 @@ class WindowContent(tk.Frame):
 		_select_input()
 		for input in input_list:
 			ttk.Radiobutton(self.general_options_frame, text = input, variable = self.inputmethod_selection, value = input, command = lambda: _select_input())
-
 
 		ttk.Separator(self.general_options_frame)
 
@@ -180,8 +188,11 @@ class WindowContent(tk.Frame):
 		self.text_field = tk.Text(self.text_frame, width = 30, height = 27)
 
 		def _confirm():
+			_cancel()
+			self.stop_event.clear()
+
 			# display confirmation overlay
-			conti = messagebox.askyesno("Continue?", "Do you want to create a database from your input?")
+			conti = messagebox.askyesno("Continue?", "Do you want to start a search with your input?")
 			if not conti:
 				return
 
@@ -190,30 +201,30 @@ class WindowContent(tk.Frame):
 			input_list = [s for s in input_list.split(delim) if s]
 			input_list = [item.strip() for item in input_list]
 			input_list = sorted(input_list) if self.itemsort_onoff.get() == 1 else input_list
-			
-			def _background_task():
-				if self.inputmethod_selection.get() == "Scientific Names" and  self.ncbi_search_onoff.get() == 1:
-					self.updateLog("\n=== Now starting NCBI search ===")
-					accessionNumberList = getAccessionNumbers(input_list, log_function=self.updateLog)[1]
-					sciNameList = input_list
-				elif self.inputmethod_selection.get() == "Scientific Names" and  self.ncbi_search_onoff.get() == 0:
-					accessionNumberList = []
-					sciNameList = input_list
-				elif self.inputmethod_selection.get() == "Accession Numbers":
-					self.updateLog("\n=== Now starting NCBI search ===")
-					accessionNumberList = input_list
-					sciNameList = getScientificNames(input_list, log_function=self.updateLog)[1]
 
+			def _background_task():
+				if self.inputmethod_selection.get() == "Scientific Names":
+					sciNameList = input_list
+					accessionNumberList = []
+				elif self.inputmethod_selection.get() == "Accession Numbers":
+					self.updateLog("\n=== Now starting search for scientific names ===")
+					accessionNumberList = input_list
+					sciNameList = getScientificNames(input_list, log_function=self.updateLog, stop_event=self.stop_event)["all"]
+					if self.stop_event.is_set():
+						self.updateLog("\nSearch cancelled during name retrieval.\n")
+						return
+	
 				out_dict = {
 					"sciNameList": sciNameList,
-					"accessionNumberList": accessionNumberList
+					"accessionNumberList": accessionNumberList,
+					"getMissing": self.ncbi_search_onoff.get(),
+					"append_data": self.db_append_onoff.get()
 				}
-				sql = CreateDatabase(out_dict, self.updateLog)
+				sql = CreateDatabase(out_dict, self.updateLog, stop_event=self.stop_event)
 
 				if self.save_db_onoff.get() == 1:
 					self.updateLog("\n=== Now starting general data download ===")
-					append_database = self.db_append_onoff.get()
-					sql.makeSQL(append_database)
+					sql.makeSQL()
 				else:
 					self.updateLog("\n=== Now starting general data download ===")
 					data_dict = sql.makeDataframes()
@@ -224,9 +235,15 @@ class WindowContent(tk.Frame):
 				self.updateLog("---------------------------\n")
 			
 			# start the search in the background so that the interface does not freeze
-			thread = threading.Thread(target = _background_task)
-			thread.start()
+			self.current_thread = threading.Thread(target = _background_task)
+			self.current_thread.daemon = True
+			self.current_thread.start()
 
+		def _cancel():
+			if self.current_thread and self.current_thread.is_alive():
+				self.stop_event.set()
+				self.current_thread.join(timeout=0.5)
+				self.updateLog("\n--- Search cancelled. ---\n")
 
 		def _export_db():
 			if not os.path.isfile(DB_FILE):
@@ -258,19 +275,19 @@ class WindowContent(tk.Frame):
 				else:
 					self.table_window.focus_set()
 
-		# create buttons
+		# create buttons, listed in reverse order of appearance
 		ttk.Button(self.button_frame_middle, text = "Export Current Database", command = lambda: _export_db())
 		ttk.Button(self.button_frame_middle, text = "View Current Database", command=lambda: _view_database())
-		ttk.Button(self.button_frame_middle, text = "Confirm Database Overwrite", command=lambda: _confirm())
+		ttk.Button(self.button_frame_middle, text = "Cancel Search", command=lambda: _cancel())
+		ttk.Button(self.button_frame_middle, text = "Confirm Search", command=lambda: _confirm())
 
 		self.text_field.pack(fill = "y", pady = 5, padx = 5)
 		# place widgets in the text frame
 		for widget in self.button_frame_middle.winfo_children():
 			if "!button" in str(widget):
-				widget.pack(fill = "x", padx = 10, pady = 2.5, side = "bottom")
+				widget.pack(fill = "x", padx = 10, pady = 0.1, side = "bottom")
 			else:
 				widget.pack()
-			
 	
 	def logOutput(self):
 		self.log_field = tk.Text(self.log_frame, width = 50, height = 37, state = "disabled", cursor = "cross")
