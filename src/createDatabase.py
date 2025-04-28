@@ -9,7 +9,10 @@ This module creates the SQL library from extracted data.
 
 import pandas as pd
 import sqlite3, os
-from .downloadSpeciesData import ResolveData
+if __name__ == "__main__":
+	from GeDaMa.src.downloadSpeciesData import ResolveData
+else:
+	from .downloadSpeciesData import ResolveData
 
 
 column_names = {
@@ -224,9 +227,30 @@ class CreateDatabase():
 
 		self.log_function(f"Data successfully loaded into internal database.")
 
+def createNewDatabase(db_file: str, log_function=print):
+	empty_value_dict = {
+		"sciNameList": [],
+		"accessionNumberList": [],
+		"getMissing": False,
+		"append_data": False
+		}
+	db_conn = sqlite3.connect(db_file)
+	c = db_conn.cursor()
+	c.execute("SELECT name FROM sqlite_master")
+	table_names = c.fetchall()
+	db_conn.close()
+
+	if not table_names:
+		print("Database is empty.")
+		sql = CreateDatabase(empty_value_dict, db_file, log_function)
+		sql.makeSQL()
+	else:
+		print("Database is not empty.")
+
+
 
 if __name__ == "__main__":
-	
+
 	testValues = {
 		"sciNameList": [
 			"Oncorhynchus mykiss",
@@ -241,7 +265,9 @@ if __name__ == "__main__":
 	}
 	
 	print(f"Test Species: {testValues['sciNameList']}")
-	"""
-	sql = CreateDatabase(testValues)
-	sql.makeSQL()
-	"""
+	
+	PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+	TEST_DB_FILE = f"{PARENT_DIR}/data/test_database.db"
+
+	createEmptyDatabase(TEST_DB_FILE)
+	
