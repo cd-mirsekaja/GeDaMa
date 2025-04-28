@@ -159,8 +159,8 @@ class CreateDatabase():
 			if self.stop_event and self.stop_event.is_set():
 				self.log_function("--- Download cancelled. ---\n")
 				break
-
-			self.log_function(f"[{IDX+1}] Downloading data for {sciName}...")
+			
+			self.log_function(f"[{IDX+1}]",end=' ')
 			acc_number = self.accNumberList[IDX]
 			data_dict = _get_data(sciName, acc_number)
 			
@@ -244,9 +244,6 @@ def createNewDatabase(db_file: str, log_function=print):
 		print("Database is empty.")
 		sql = CreateDatabase(empty_value_dict, db_file, log_function)
 		sql.makeSQL()
-	else:
-		print("Database is not empty.")
-
 
 
 if __name__ == "__main__":
@@ -269,5 +266,5 @@ if __name__ == "__main__":
 	PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 	TEST_DB_FILE = f"{PARENT_DIR}/data/test_database.db"
 
-	createEmptyDatabase(TEST_DB_FILE)
+	createNewDatabase(TEST_DB_FILE)
 	

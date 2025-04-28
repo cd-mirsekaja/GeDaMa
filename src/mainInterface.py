@@ -8,7 +8,7 @@ This module constructs the main interface for the program.
 """
 
 # import various packages
-import os, shutil, threading
+import os, shutil, threading, numpy
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
@@ -16,7 +16,6 @@ from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter import messagebox
 
 from .createDatabase import CreateDatabase
-from .downloadSpeciesData import getScientificNames
 from .databaseInterface import DatabaseInterface
 from .configInterface import OptionsInterface, makeConfigFile
 from .setup import CONFIG_FILE, DB_FILE, SCRIPT_DIR
@@ -30,7 +29,7 @@ class DatabaseMakerInterface(tk.Toplevel):
 	def __init__(self, db_file: str, app_title: str, app_version: str=""):
 		super().__init__()
 		self.title(f'{app_title} {app_version}')
-		self.resizeWindow(1000, 550)
+		self.resizeWindow(1220, 580)
 
 		self.main_frame = ttk.Frame(self)
 		self.main_frame.pack(fill='both', expand=True)
@@ -46,7 +45,7 @@ class MainInterface(tk.Tk):
 	def __init__(self, app_title: str, app_version: str=""):
 		super().__init__()
 		self.title(f'{app_title} {app_version}')
-		self.resizeWindow(1000, 550)
+		self.resizeWindow(1220, 580, max=False)
 
 		self.main_frame = ttk.Frame(self)
 		self.main_frame.pack(fill='both', expand=True)
@@ -58,14 +57,14 @@ class WindowContent(tk.Frame):
 	
 	def __init__(self, main_frame, module: bool=False, db_file: str=DB_FILE):
 		super().__init__(main_frame)
-		self.log_frame = ttk.LabelFrame(main_frame, text = "Log", border = 2, relief = "flat")
-		self.log_frame.pack(side = "right", padx = 20, pady = 20, fill = "both")
-
-		self.text_frame = ttk.LabelFrame(main_frame, text = f"Enter Data:", border = 0, relief = "flat")
-		self.text_frame.pack(side = "right", padx = 20, pady = 20, fill = "y")
-
 		self.options_frame = ttk.LabelFrame(main_frame, text = "Options", border = 2, relief = "solid")
 		self.options_frame.pack(side = "left", padx = 20, pady = 20, fill = "both")
+
+		self.text_frame = ttk.LabelFrame(main_frame, text = f"Enter Data:", border = 0, relief = "flat")
+		self.text_frame.pack(side = "left", padx = 20, pady = 20, fill = "y")
+
+		self.log_frame = ttk.LabelFrame(main_frame, text = "Log", border = 2, relief = "flat")
+		self.log_frame.pack(side = "left", padx = 20, pady = 20, fill = "both")
 
 		self.current_thread = None
 		self.stop_event = threading.Event()
@@ -80,111 +79,141 @@ class WindowContent(tk.Frame):
 		self.general_options_frame = ttk.Frame(self.options_frame)
 		self.general_options_frame.pack(side = "top", fill = "x", pady = 10)
 
-		def _switch_state(widget):
-			if self.save_db_onoff.get() == 1:
-				widget.configure(state="normal")
-			else:
+		def _switch_state(widget, variable, trigger=0):
+			if variable.get() == trigger:
 				widget.configure(state="disabled")
+			else:
+				widget.configure(state="normal")
 		
-		self.button_frame_right = ttk.Frame(self.options_frame)
-		self.button_frame_right.pack(side = "bottom", fill = "x", pady = 10)
+		self.delim_selector = tk.StringVar()
+		self.delim_selector.set(";")
+
+
+		self.button_frame_left = ttk.Frame(self.options_frame)
+		self.button_frame_left.pack(side = "bottom", fill = "x", pady = 10)
 
 		self.save_db_onoff = tk.IntVar()
-		ttk.Checkbutton(self.general_options_frame, text = "Save output to database file", variable = self.save_db_onoff, onvalue = 1, offvalue = 0, command=lambda: _switch_state(append_button))
+		ttk.Checkbutton(self.general_options_frame, text = "Save output to database file", variable = self.save_db_onoff, onvalue = 1, offvalue = 0,
+				command=lambda: _switch_state(append_check, self.save_db_onoff))
 		self.save_db_onoff.set(1)
 
-		# when appending and not overwriting, the IDX gets reset. Needs to be fixed.
 		self.db_append_onoff = tk.IntVar()
-		append_button=ttk.Checkbutton(self.general_options_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
+		append_check=ttk.Checkbutton(self.general_options_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
 		self.db_append_onoff.set(1)
 
+		"""
 		self.itemsort_onoff = tk.IntVar()
 		ttk.Checkbutton(self.general_options_frame, text = "Sort output alphabetically", variable = self.itemsort_onoff, onvalue = 1, offvalue = 0)
 		self.itemsort_onoff.set(1)
+		"""
 
+		# widgets for sorting the output
+		ttk.Label(self.general_options_frame, text = "Sort output by:")
+		sorting_options = [None, 'Accession Numbers', 'Scientific Names']
+		self.sorting_selection = tk.StringVar()
+		self.sorting_selection.set(sorting_options[0])
+		tk.OptionMenu(self.general_options_frame, self.sorting_selection, *sorting_options)
+		
 		ttk.Separator(self.general_options_frame)
 
 		self.ncbi_search_onoff = tk.IntVar()
-		ttk.Checkbutton(self.general_options_frame, text = "Search for NCBI Accession Numbers", variable = self.ncbi_search_onoff, onvalue = 1, offvalue = 0)
+		self.ncbi_search_button = ttk.Checkbutton(self.general_options_frame, text = "Search for NCBI Accession Numbers",
+				variable = self.ncbi_search_onoff, onvalue = 1, offvalue = 0)
 		self.ncbi_search_onoff.set(1)
 
 		ttk.Separator(self.general_options_frame)
 
 		# widgets for choosing the input method
 		def _select_input():
-			self.text_frame.configure(text = f"Enter {self.inputmethod_selection.get()}:")
-			self.ncbi_search_onoff.set(0) if self.inputmethod_selection.get() == "Accession Numbers" else self.ncbi_search_onoff.set(1)
+			[_switch_state(radio, self.inputmethod_selection, trigger="Both_On") for radio in self.radiobuttons.values()]
+			sel_input = self.inputmethod_selection.get()
+			if sel_input == "Both_On":
+				self.sorting_selection.set(None)
+				self.text_frame.configure(text = f"Enter values as Number{self.delim_selector.get()}Name")
+			elif sel_input == "Both_Off":
+				self.inputmethod_selection.set(self.input_list[0])
+				self.sorting_selection.set(self.input_list[0])
+				self.text_frame.configure(text = f"Enter list of {self.inputmethod_selection.get()}")
+			else:
+				self.text_frame.configure(text = f"Enter list of {self.inputmethod_selection.get()}")
+				self.sorting_selection.set(sel_input)
+			_switch_state(self.ncbi_search_button, self.inputmethod_selection, trigger="Accession Numbers")
+			
 		
-		ttk.Label(self.general_options_frame, text = "Select input method:")
-		input_list = [
+		#ttk.Label(self.general_options_frame, text = "Select input method:")
+		self.input_method_frame = ttk.Labelframe(self.general_options_frame, text = "Select input method:")
+		self.input_list = [
 			"Accession Numbers",
-			"Scientific Names"
+			"Scientific Names",
+			"Both_On",
+			"Both_Off"
 		]
 		self.inputmethod_selection = tk.StringVar()
-		self.inputmethod_selection.set(input_list[1])
+		self.inputmethod_selection.set(self.input_list[2])
+		self.radiobuttons = {}
+		ttk.Checkbutton(self.input_method_frame, text = "Both values", variable=self.inputmethod_selection, onvalue="Both_On", offvalue="Both_Off",
+				command=lambda: _select_input())
+		
+		self.radiobuttons[self.input_list[0]] = ttk.Radiobutton(self.input_method_frame, text = self.input_list[0],
+				variable = self.inputmethod_selection, value = self.input_list[0], command = lambda: _select_input())
+		self.radiobuttons[self.input_list[1]] = ttk.Radiobutton(self.input_method_frame, text = self.input_list[1],
+				variable = self.inputmethod_selection, value = self.input_list[1], command = lambda: _select_input())
 		_select_input()
-		for input in input_list:
-			ttk.Radiobutton(self.general_options_frame, text = input, variable = self.inputmethod_selection, value = input, command = lambda: _select_input())
 
 		ttk.Separator(self.general_options_frame)
 
 		# widgets for choosing the item delimiter
 		ttk.Label(self.general_options_frame, text = "Set item delimiter:")
 		delim_tuple = (
-			"Linebreak",
+			";",
 			",",
-			";"
+			"|"
 		)
-		self.delim_selector = tk.StringVar()
 		choose_delimiter = ttk.Combobox(self.general_options_frame, textvariable = self.delim_selector)
 		choose_delimiter["values"] = delim_tuple
 		choose_delimiter.current(0)
 
 		# place all general options widgets on the interface
 		for widget in self.general_options_frame.winfo_children():
-			if ".!frame.!labelframe3.!frame.!label" in str(widget):
-				widget.pack(fill = "x", padx = 20, pady = 0)
-			elif ".!frame.!labelframe3.!frame.!checkbutton" in str(widget):
-				widget.pack(fill = "x", padx = 20, pady = 2.5)
-			elif ".!frame.!labelframe3.!frame.!radiobutton" in str(widget):
-				widget.pack(fill = "x", padx = 20, pady = 2.5)
+			frame_name = ".!frame.!labelframe.!frame"
+			if f"{frame_name}.!labelframe" in str(widget):
+				widget.pack(fill="both", padx=10, pady=5)
+				for sub_widget in widget.winfo_children():
+					sub_widget.pack(fill = "x", padx = 10, pady = 2.5)
+			elif f"{frame_name}.!label" in str(widget):
+				widget.pack(fill = "x", padx = 10, pady = 0, side="top")
+			elif f"{frame_name}.!checkbutton" in str(widget):
+				widget.pack(fill = "x", padx = 10, pady = 2.5, side="top")
 			else:
-				widget.pack(fill = "x", padx = 20, pady = 5)
+				widget.pack(fill = "x", padx = 10, pady = 5)
 
 		# set list with possible text formats
 		textfile_types=[
 			("Simple Text Files", "*.txt"),
 			("Complex Text Files", "*.rtf"),
+			("Comma Separated Values", "*.csv"),
 			("Markdown Files", ".md")
 			]
 
 		# function for opening the options window
-		self.options_window_open=False
+		self.config_window_open=False
 		def _view_config():
 				if not os.path.isfile(CONFIG_FILE):
 					messagebox.showwarning("File missing", "No config file found, empty file will be initialized.")
 					makeConfigFile()
 
 				# function for destroying the window after it has been closed
-				def onTableClose():
-					self.options_window.destroy()
-					self.options_window_open=False
+				def _onConfigClose():
+					self.config_window.destroy()
+					self.config_window_open=False
 				
-				if not self.options_window_open:
-					self.options_window=OptionsInterface()
-					self.options_window.protocol('WM_DELETE_WINDOW',lambda: onTableClose())
-					self.options_window_open=True
+				if not self.config_window_open:
+					self.config_window=OptionsInterface()
+					self.config_window.protocol('WM_DELETE_WINDOW',lambda: _onConfigClose())
+					self.config_window_open=True
 				else:
-					self.options_window.focus_set()
+					self.config_window.focus_set()
 		
-		# function for uploading a file to the data folder
-		def _upload_file():
-			filepath=askopenfilename(filetypes=textfile_types)
-			if not filepath:
-				return
-			
-			shutil.copy(filepath, os.path.join(SCRIPT_DIR, "data/"))
-
 		# function for uploading a text file into the text field
 		def _open_file():
 			filepath=askopenfilename(filetypes=textfile_types)
@@ -211,23 +240,22 @@ class WindowContent(tk.Frame):
 			self.text_field.delete(1.0, tk.END)
 
 
-		ttk.Separator(self.button_frame_right)
-		ttk.Button(self.button_frame_right, text = "Advanced Options", command = lambda: _view_config())
-		ttk.Separator(self.button_frame_right)
-		#ttk.Button(self.button_frame_right, text = "Upload Accession Numbers", command = lambda: _upload_file())
-		ttk.Button(self.button_frame_right, text = "Upload Text File", command = lambda: _open_file())
-		ttk.Button(self.button_frame_right, text = "Save Text File", command = lambda: _save_file())
-		ttk.Button(self.button_frame_right, text = "Remove Text", command = lambda: _reset())
+		ttk.Separator(self.button_frame_left)
+		ttk.Button(self.button_frame_left, text = "Change Config", command = lambda: _view_config())
+		ttk.Separator(self.button_frame_left)
+		ttk.Button(self.button_frame_left, text = "Upload Text", command = lambda: _open_file())
+		ttk.Button(self.button_frame_left, text = "Save Text", command = lambda: _save_file())
+		ttk.Button(self.button_frame_left, text = "Remove Text", command = lambda: _reset())
 
-		for item in self.button_frame_right.winfo_children():
-			item.pack(fill = "x", padx = 20, pady = 2.5)
+		for item in self.button_frame_left.winfo_children():
+			item.pack(fill = "x", padx = 10, pady = 1)
 
 	def speciesNameInput(self):
 
 		self.button_frame_middle = ttk.Frame(self.text_frame)
 		self.button_frame_middle.pack(side = "bottom", fill = "x", pady = 10)
 
-		self.text_field = tk.Text(self.text_frame, width = 30, height = 27)
+		self.text_field = tk.Text(self.text_frame, width = 40, height = 27)
 
 		def _confirm():
 			_cancel()
@@ -238,24 +266,33 @@ class WindowContent(tk.Frame):
 			if not conti:
 				return
 
-			delim = self.delim_selector.get() if self.delim_selector.get() != "Linebreak" else "\n"
+			delim = self.delim_selector.get()
 			input_list = self.text_field.get(1.0, tk.END)
-			input_list = [s for s in input_list.split(delim) if s]
+			input_list = [s for s in input_list.split("\n") if s]
 			input_list = [item.strip() for item in input_list]
-			input_list = sorted(input_list) if self.itemsort_onoff.get() == 1 else input_list
-
+			
 			def _background_task():
-				if self.inputmethod_selection.get() == "Scientific Names":
-					sciNameList = input_list
+				input_sorting = self.sorting_selection.get()
+				selected_input = self.inputmethod_selection.get()
+				if selected_input == "Scientific Names":
 					accessionNumberList = []
-				elif self.inputmethod_selection.get() == "Accession Numbers":
-					self.updateLog("\n=== Now starting search for scientific names ===")
-					accessionNumberList = input_list
-					sciNameList = getScientificNames(input_list, log_function=self.updateLog, stop_event=self.stop_event)["all"]
-					if self.stop_event.is_set():
-						self.updateLog("\nSearch cancelled during name retrieval.\n")
-						return
-	
+					sciNameList = sorted(input_list) if input_sorting == "Scientific Names" else input_list
+				elif selected_input == "Accession Numbers":
+					accessionNumberList = sorted(input_list) if input_sorting == "Accession Numbers" else input_list
+					sciNameList = []
+				elif selected_input == "Both_On":
+					accessionNumberList = [item.split(delim)[0] for item in input_list]
+					sciNameList = [item.split(delim)[1] for item in input_list]
+
+					if input_sorting == "Accession Numbers":
+						indices = numpy.argsort(accessionNumberList)
+						accessionNumberList = [accessionNumberList[i] for i in indices]
+						sciNameList = [sciNameList[i] for i in indices]
+					elif input_sorting == "Scientific Names":
+						indices = numpy.argsort(sciNameList)
+						accessionNumberList = [accessionNumberList[i] for i in indices]
+						sciNameList = [sciNameList[i] for i in indices]
+
 				out_dict = {
 					"sciNameList": sciNameList,
 					"accessionNumberList": accessionNumberList,
@@ -299,53 +336,56 @@ class WindowContent(tk.Frame):
 			shutil.copyfile(self.db_file, filepath)
 		
 		# function for opening the database viewer
-		self.table_window_open=False
+		self.database_window_open=False
 		def _view_database():
 				if not os.path.isfile(self.db_file):
 					messagebox.showwarning("File missing", "No database file found!")
 					return
 
 				# function for destroying the window after it has been closed
-				def onTableClose():
-					self.table_window.destroy()
-					self.table_window_open=False
+				def _onDatabaseClose():
+					self.database_window.destroy()
+					self.database_window_open=False
 				
-				if not self.table_window_open:
-					self.table_window=DatabaseInterface(db_file=self.db_file)
-					self.table_window.protocol('WM_DELETE_WINDOW',lambda: onTableClose())
-					self.table_window_open=True
+				if not self.database_window_open:
+					self.database_window=DatabaseInterface(db_file=self.db_file)
+					self.database_window.protocol('WM_DELETE_WINDOW',lambda: _onDatabaseClose())
+					self.database_window_open=True
 				else:
-					self.table_window.focus_set()
+					self.database_window.focus_set()
 
 		# create buttons, listed in reverse order of appearance
-		ttk.Button(self.button_frame_middle, text = "Export Current Database", command = lambda: _export_database())
-		ttk.Button(self.button_frame_middle, text = "View Current Database", command=lambda: _view_database())
-		ttk.Button(self.button_frame_middle, text = "Cancel Search", command=lambda: _cancel())
 		ttk.Button(self.button_frame_middle, text = "Confirm Search", command=lambda: _confirm())
+		ttk.Button(self.button_frame_middle, text = "Cancel Search", command=lambda: _cancel())
+		
+		ttk.Button(self.button_frame_middle, text = "View Current Database", command=lambda: _view_database())
+		ttk.Button(self.button_frame_middle, text = "Export Current Database", command = lambda: _export_database())
 
-		self.text_field.pack(fill = "y", pady = 5, padx = 5)
-		# place widgets in the text frame
-		for widget in self.button_frame_middle.winfo_children():
-			if "!button" in str(widget):
-				widget.pack(fill = "x", padx = 10, pady = 0.1, side = "bottom")
-			else:
-				widget.pack()
+		self.text_field.pack(fill = "y", pady = 5, padx = 10)
+		ttk.Separator(self.button_frame_middle).grid(column=1, row=0, columnspan=2, sticky="ew", padx=5, pady=10)
+		# place middle buttons
+		button_idx = 1
+		for button in self.button_frame_middle.winfo_children():
+			if "!button" in str(button):
+				if button_idx<=2:
+					button.grid(column=button_idx, row=1, padx=10, pady=0.1, sticky="ew")
+					button_idx = button_idx+1
+				elif button_idx>=3:
+					button.grid(column=1, row=button_idx-1, padx=10, pady=0.1, columnspan=2, sticky="ew")
+					button_idx = button_idx+1
 	
 	def logOutput(self):
-		self.log_field = tk.Text(self.log_frame, width = 50, height = 37, state = "disabled", cursor = "cross")
+		self.log_field = tk.Text(self.log_frame, width = 75, height = 40, state = "disabled", cursor = "cross")
 		self.log_field.pack(fill = "y")
 	
-	def updateLog(self, message):
+	def updateLog(self, message, end: str="\n"):
 		self.log_field.configure(state = "normal")
-		self.log_field.insert(tk.END, message + "\n")
+		self.log_field.insert(tk.END, f"{message}{end}")
 		self.log_field.see(tk.END)  # Scroll to the end
 		self.log_field.configure(state = "disabled")
 
 
-
-
-
 if __name__ == "__main__":
-	main_window = MainInterface("Genome Database Maker", "[only for testing]")
+	main_window = MainInterface("Taxonda", "[only for testing]")
 	main_window.focus_set()
 	main_window.mainloop()

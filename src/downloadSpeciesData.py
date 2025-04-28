@@ -44,7 +44,7 @@ def restResponse(api_url: str):
 	except json.JSONDecodeError:
 		return None
 
-def speciesResponse(api_url: str, spec_id: str, rest_mod: str="", list_level: int=0):
+def speciesResponse(api_url: str, spec_id: str, rest_mod: str="", list_level: int=0, log_function=print, source: str=""):
 	"""
 	Function for saving the server response for a species specific API call.
 
@@ -56,6 +56,8 @@ def speciesResponse(api_url: str, spec_id: str, rest_mod: str="", list_level: in
 	Returns:
 		dict: {key: str} or empty dict
 	"""
+	log_function(f"{source}", end=" ")
+
 	list_index = ''.join('[0]' for _ in range(list_level))
 	api_url = (f"{api_url}{spec_id}{rest_mod}")
 	response = restResponse(api_url)
@@ -208,12 +210,11 @@ class GetInformation:
 		self.log_function = log_function
 
 		api_info = getSingleConfig("API_OPTIONS")
-		print(api_info)
 
 		if arg_dict["sciName"]:
 			self.sciName = arg_dict["sciName"]
 		elif not arg_dict["sciName"] and arg_dict["accessionNumber"]:
-			log_function("No scientific name provided. Searching for name by accession number...")
+			log_function("Searching NCBI for scientific name by accession number...")
 			self.sciName = self.getSciName(arg_dict["accessionNumber"])
 		else:
 			log_function("No scientific name found or provided.")
@@ -222,11 +223,13 @@ class GetInformation:
 		if arg_dict["accessionNumber"]:
 			self.accessionNumber = arg_dict["accessionNumber"]
 		elif not arg_dict["accessionNumber"] and arg_dict["getMissing"]:
-			log_function("No accession number provided. Searching NCBI Assembly by scientific name...")
+			log_function("Searching NCBI for accession number by scientific name...")
 			self.accessionNumber = self.getAccessionNumber(api_info["ncbi_api_mail"], api_info["ncbi_api_key"])
 		else:
 			self.accessionNumber = ""
 		
+		self.log_function(f"Downloading data for {self.sciName}...")
+
 		self.response_dict = self.getResponses()
 	
 	def getSciName(self, accessionNumber: str):
@@ -241,7 +244,7 @@ class GetInformation:
 		"""
 		rest_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/"
 		rest_mod = "/dataset_report"
-		dataset_response = speciesResponse(rest_URL, accessionNumber, rest_mod)
+		dataset_response = speciesResponse(rest_URL, accessionNumber, rest_mod, log_function=self.log_function, source="NCBI")
 		try:
 			sci_name = dataset_response["reports"][0]["organism"]["organism_name"]
 			self.log_function(f"{sci_name} found for {accessionNumber}")
@@ -359,8 +362,8 @@ class GetInformation:
 		
 		sciname_mod = '%20'.join(self.sciName.split())
 
-		def _general_vernaculars(platform: str, base_url: str, spec_id: str, rest_mod: str=""):
-			response = speciesResponse(base_url, spec_id, rest_mod)
+		def _general_vernaculars(platform: str, base_url: str, spec_id: str, rest_mod: str="", source: str=""):
+			response = speciesResponse(base_url, spec_id, rest_mod, log_function=self.log_function, source=source)
 
 			if response!=None:
 				if platform == "WORMS":
@@ -383,6 +386,8 @@ class GetInformation:
 		
 		# get Wikipedia page titles for vernaculars
 		def _wikipedia_vernaculars():
+			self.log_function("Wikipedia")
+
 			wiki_en = wiki.Wikipedia('VernacularData','en')
 			wiki_de = wiki.Wikipedia('VernacularData','de')
 
@@ -414,12 +419,12 @@ class GetInformation:
 
 		# combine all responses into a dictionary and return it
 		data_dict = {
-			"WORMS": speciesResponse(WORMS_url, sciname_mod, WORMS_mod, list_level=2),
-			"GBIF": speciesResponse(GBIF_url, str(id_dict["GBIF-UsageKey"])),
-			"IRMNG": speciesResponse(IRMNG_url, sciname_mod, list_level=2),
-			"PESI": speciesResponse(PESI_url, sciname_mod, list_level=1),
-			"WORMS-Vernaculars": _general_vernaculars("WORMS", WORMS_vern_url, str(id_dict["AphiaID"])),
-			"GBIF-Vernaculars": _general_vernaculars("GBIF", GBIF_url, str(id_dict["GBIF-UsageKey"]), GBIF_vern_mod),
+			"WORMS": speciesResponse(WORMS_url, sciname_mod, WORMS_mod, list_level=2, log_function=self.log_function, source="WoRMS"),
+			"GBIF": speciesResponse(GBIF_url, str(id_dict["GBIF-UsageKey"]), log_function=self.log_function, source="GBIF"),
+			"IRMNG": speciesResponse(IRMNG_url, sciname_mod, list_level=2, log_function=self.log_function, source="IRMNG"),
+			"PESI": speciesResponse(PESI_url, sciname_mod, list_level=1, log_function=self.log_function, source="PESI"),
+			"WORMS-Vernaculars": _general_vernaculars("WORMS", WORMS_vern_url, str(id_dict["AphiaID"]), source="WORMS-Vernaculars"),
+			"GBIF-Vernaculars": _general_vernaculars("GBIF", GBIF_url, str(id_dict["GBIF-UsageKey"]), GBIF_vern_mod, source="GBIF-Vernaculars"),
 			"Wikipedia-Vernaculars": _wikipedia_vernaculars(),
 			"IDs": id_dict
 		}
@@ -446,11 +451,11 @@ class GetInformation:
 		gbif_url = "https://api.gbif.org/v1/species?name="
 		gbif_mod = "&offset=0&limit=1"
 		
-		irmng_id = speciesResponse(irmng_url, sciname_mod)
-		guid_id = speciesResponse(pesi_url, sciname_mod)
-		aphia_id = speciesResponse(worms_url, sciname_mod, worms_mod)
+		irmng_id = speciesResponse(irmng_url, sciname_mod, log_function=self.log_function, source="IRMNG-ID")
+		guid_id = speciesResponse(pesi_url, sciname_mod, log_function=self.log_function, source="PESI-ID")
+		aphia_id = speciesResponse(worms_url, sciname_mod, worms_mod, log_function=self.log_function, source="WORMS-ID")
 		try:
-			gbif_usageKey = speciesResponse(gbif_url, sciname_mod, gbif_mod)["results"][0]["key"]
+			gbif_usageKey = speciesResponse(gbif_url, sciname_mod, gbif_mod, log_function=self.log_function, source="WORMS-ID")["results"][0]["key"]
 		except:
 			gbif_usageKey = ""
 
@@ -473,6 +478,9 @@ class GetInformation:
 		gbif_data = self.response_dict["GBIF"]
 		tkingdom, tphylum, tclass, torder, tfamily, tgenus, tspecies, tsciName, tauthority = "","","","","","","","",""
 		if gbif_data != {}:
+			if 'results' in gbif_data:
+				gbif_data = gbif_data['results'][0]
+			
 			if 'kingdom' in gbif_data:
 				tkingdom = gbif_data['kingdom']
 			if 'phylum' in gbif_data:
@@ -631,6 +639,28 @@ class GetInformation:
 			"Authority": tauthority
 			}
 		return out_dict
+	
+	def userTaxpath(self):
+		u_sciname = self.sciName
+		if u_sciname:
+			u_genus = u_sciname.split()[0]
+			u_species = u_sciname.split()[1]
+		else:
+			u_genus, u_species = "", ""
+
+		out_dict={
+			"Kingdom": "",
+			"Phylum": "",
+			"Class": "",
+			"taxOrder": "",
+			"Family": "",
+			"Genus": u_genus,
+			"Species": u_species,
+			"ScientificName": u_sciname,
+			"Authority": ""
+			}
+		return out_dict
+
 
 	# function for parsing trait information from IRMNG
 	def irmngTraits(self):
@@ -739,6 +769,7 @@ class GetInformation:
 				"IRMNG": self.irmngTaxpath(),
 				"GBIF": self.gbifTaxpath(),
 				"PESI": self.pesiTaxpath(),
+				"User_Input": self.userTaxpath(),
 				"Vernaculars": self.allVernaculars()
 			},
 			"Traits": {
@@ -789,7 +820,11 @@ class ResolveData:
 		# iterate through taxonomy dict
 		for main_key in main_keys:
 			# set output dict values to values of current sub dictionary
-			out_dict = {key: tax_dict[main_key][key] for key in keys}
+			try:
+				out_dict = {key: tax_dict[main_key][key] for key in keys}
+			except KeyError:
+				continue
+
 			# if all values of current dictionary are empty, continue. else, break out of for loop
 			if all(out_dict.values()):
 				break
@@ -874,24 +909,34 @@ if __name__=="__main__":
 			"Oncorhynchus mykiss",
 			"Calidris alpina",
 			"Anguilla anguilla",
-			"Gorilla gorilla"
+			"Gorilla gorilla",
+			"Bos taurus indicus"
 		],
 		"accessionNumberList": [
 			"GCF_002163495.1",
 			"",
-			"GCA_000695075.1"
+			"GCA_000695075.1",
+			"",
+			"GCA_003369685.2"
 		]
 	}
-	print(f"Test Species: {testValues['sciNameList'][0]}")
+	test_sp = 4
+
+	print(f"Test Species: {testValues['sciNameList'][test_sp]}")
 
 	#names = getScientificNames(testValues["accessionNumberList"])
 	#print(names["all"])
 
+
 	search_dict = {
-				"sciName": testValues['sciNameList'][0],
-				"accessionNumber": testValues['accessionNumberList'][0],
+				"sciName": testValues['sciNameList'][test_sp],
+				"accessionNumber": testValues['accessionNumberList'][test_sp],
 				"getMissing": True
 			}
+	
+	#info = GetInformation(print, search_dict)
+	#print(info.gbifTaxpath())
+	#print("\n")
 
 	data = ResolveData(search_dict)
 	print(data.combineDictionaries())

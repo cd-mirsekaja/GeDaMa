@@ -98,6 +98,15 @@ class WindowContent(tk.Frame):
 				file_content = file.read()
 				self.config_text.insert(1.0, file_content)
 			self.config_text.config(state='disabled')
+		
+		def _update_entries():
+			for main_key in self.entries:
+				config_data = getSingleConfig(main_key)
+				for sub_key in self.entries[main_key]:
+					entry = self.entries[main_key][sub_key]
+					config_item = config_data[sub_key.lower()]
+					entry.delete(0, tk.END)
+					entry.insert(0, config_item)
 
 		def _place_entries():
 			entry_dict = {}
@@ -119,7 +128,7 @@ class WindowContent(tk.Frame):
 
 			return entry_dict
 		
-		def _get_entries():
+		def _save_entries():
 			CONFIG_PARSE.read(CONFIG_FILE)
 			for main_key in self.entries:
 				config_key = CONFIG_PARSE[main_key]
@@ -132,11 +141,20 @@ class WindowContent(tk.Frame):
 			CONFIG_PARSE.clear()
 			_update_text()
 		
+		def _reset_config():
+			makeConfigFile(replace=True)
+			_update_text()
+			_update_entries()
+		
 		_place_text()
 		self.entries = _place_entries()
 		
-		self.save_button = ttk.Button(self.button_row, text="Save & Update", command=lambda: _get_entries())
-		self.save_button.pack(fill='x', padx=10, pady=10, expand=True)
+		self.save_button = ttk.Button(self.button_row, text="Save & Update", command=lambda: _save_entries())
+		self.reset_button = ttk.Button(self.button_row, text="Reset Config", command=lambda: _reset_config())
+
+		for widget in self.button_row.winfo_children():
+			if 'button' in str(widget):
+				widget.pack(side = 'left', fill='x', padx=10, pady=2, expand=True)
 
 if __name__ == "__main__":
 	makeConfigFile(replace=False)
