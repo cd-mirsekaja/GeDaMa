@@ -25,7 +25,7 @@ column_names = {
 				"Family",
 				"Genus",
 				"Species",
-				#"Subspecies",
+				"Subspecies",
 				"ScientificName",
 				"Authority",
 				"Vernacular_Eng",
@@ -162,7 +162,10 @@ class CreateDatabase():
 			
 			self.log_function(f"[{IDX+1}]",end=' ')
 			acc_number = self.accNumberList[IDX]
-			data_dict = _get_data(sciName, acc_number)
+			try:
+				data_dict = _get_data(sciName, acc_number)
+			except ValueError:
+				continue
 			
 			taxonomy_data = [
 				modified_IDX,

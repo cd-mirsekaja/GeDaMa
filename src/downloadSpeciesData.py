@@ -228,7 +228,13 @@ class GetInformation:
 		else:
 			self.accessionNumber = ""
 		
-		self.log_function(f"Downloading data for {self.sciName}...")
+		"""
+		if len(self.sciName.split()) < 2:
+			self.log_function(f"Scientific name {self.sciName} not valid. Skipping...")
+			raise ValueError("Scientific name not valid.")
+		else:
+			self.log_function(f"Downloading data for {self.sciName}...")
+		"""
 
 		self.response_dict = self.getResponses()
 	
@@ -509,6 +515,7 @@ class GetInformation:
 			"Family": tfamily,
 			"Genus": tgenus,
 			"Species": tspecies,
+			"Subspecies": "",
 			"ScientificName": tsciName,
 			"Authority": tauthority
 			}
@@ -551,6 +558,7 @@ class GetInformation:
 			"Family": tfamily,
 			"Genus": tgenus,
 			"Species": tspecies,
+			"Subspecies": "",
 			"ScientificName": tsciName,
 			"Authority": tauthority
 			}
@@ -593,6 +601,7 @@ class GetInformation:
 			"Family": tfamily,
 			"Genus": tgenus,
 			"Species": tspecies,
+			"Subspecies": "",
 			"ScientificName": tsciName,
 			"Authority": tauthority
 			}
@@ -635,6 +644,7 @@ class GetInformation:
 			"Family": tfamily,
 			"Genus": tgenus,
 			"Species": tspecies,
+			"Subspecies": "",
 			"ScientificName": tsciName,
 			"Authority": tauthority
 			}
@@ -642,11 +652,17 @@ class GetInformation:
 	
 	def userTaxpath(self):
 		u_sciname = self.sciName
-		if u_sciname:
-			u_genus = u_sciname.split()[0]
-			u_species = u_sciname.split()[1]
+		u_sciname_split = u_sciname.split()
+		if u_sciname_split and len(u_sciname_split) >= 2:
+			u_genus = u_sciname_split[0]
+			u_species = u_sciname_split[1]
+			u_subspecies = u_sciname_split[2] if len(u_sciname_split) > 2 else ""
+		elif u_sciname_split and len(u_sciname_split) == 1:
+			u_genus = u_sciname_split[0]
+			u_species = ""
+			u_subspecies = ""
 		else:
-			u_genus, u_species = "", ""
+			u_genus, u_species, u_subspecies = "", "", ""
 
 		out_dict={
 			"Kingdom": "",
@@ -656,6 +672,7 @@ class GetInformation:
 			"Family": "",
 			"Genus": u_genus,
 			"Species": u_species,
+			"Subspecies": u_subspecies,
 			"ScientificName": u_sciname,
 			"Authority": ""
 			}

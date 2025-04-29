@@ -27,7 +27,6 @@ def makeConfigFile(replace: bool=False):
 	"""
 	Creates a config file for the program.
 	"""
-
 	if not os.path.exists(CONFIG_FILE) or replace:
 		with open(CONFIG_FILE, 'w') as configfile:
 			CONFIG_PARSE.read_dict(CONFIG_KEYS)

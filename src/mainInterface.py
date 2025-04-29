@@ -18,7 +18,7 @@ from tkinter import messagebox
 from .createDatabase import CreateDatabase
 from .databaseInterface import DatabaseInterface
 from .configInterface import OptionsInterface, makeConfigFile
-from .setup import CONFIG_FILE, DB_FILE, SCRIPT_DIR
+from .setup import CONFIG_FILE, DB_FILE
 
 class DatabaseMakerInterface(tk.Toplevel):
 	def resizeWindow(self, x: int, y: int, min: bool=True, max: bool=True):
@@ -199,7 +199,7 @@ class WindowContent(tk.Frame):
 		self.config_window_open=False
 		def _view_config():
 				if not os.path.isfile(CONFIG_FILE):
-					messagebox.showwarning("File missing", "No config file found, empty file will be initialized.")
+					messagebox.showwarning("File missing", "No config found, empty file will be initialized.")
 					makeConfigFile()
 
 				# function for destroying the window after it has been closed
@@ -238,7 +238,6 @@ class WindowContent(tk.Frame):
 		# function for resetting the text field
 		def _reset():
 			self.text_field.delete(1.0, tk.END)
-
 
 		ttk.Separator(self.button_frame_left)
 		ttk.Button(self.button_frame_left, text = "Change Config", command = lambda: _view_config())
@@ -281,6 +280,7 @@ class WindowContent(tk.Frame):
 					accessionNumberList = sorted(input_list) if input_sorting == "Accession Numbers" else input_list
 					sciNameList = []
 				elif selected_input == "Both_On":
+					
 					accessionNumberList = [item.split(delim)[0] for item in input_list]
 					sciNameList = [item.split(delim)[1] for item in input_list]
 

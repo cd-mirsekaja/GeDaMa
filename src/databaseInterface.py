@@ -10,6 +10,7 @@
 #import tkinter for managing GUI
 import tkinter as tk
 from tkinter import ttk
+from tkinter.filedialog import asksaveasfilename
 import os, sqlite3
 
 from .createDatabase import column_names
@@ -27,8 +28,8 @@ class DatabaseInterface(tk.Toplevel):
 	
 	def __init__(self, db_file: str, comment: str=""):
 		super().__init__()
-		self.title(f"Database Viewer {comment}")
-		self.resizeWindow(830, 900)
+		self.title(f"Database Overview {comment}")
+		self.resizeWindow(1080, 900)
 		
 		main_frame=tk.Frame(self)
 		main_frame.pack(fill='both',expand=True)
@@ -41,9 +42,9 @@ class WindowContent(tk.Frame):
 	def __init__(self,main_frame, db_file: str):
 		super().__init__(main_frame)
 		
-		self.table_frame=tk.LabelFrame(main_frame,text="Table",height=540,width=780)
+		self.table_frame=tk.LabelFrame(main_frame,text="Table",height=540,width=1000)
 		self.table_frame.pack_propagate(False)
-		self.option_frame=tk.LabelFrame(main_frame,text="Options",height=200,width=780)
+		self.option_frame=tk.LabelFrame(main_frame,text="Options",height=200,width=1000)
 		self.option_frame.columnconfigure(0, weight=0)
 		self.option_frame.columnconfigure(1, weight=1)
 		self.option_frame.columnconfigure(2, weight=1)
@@ -76,7 +77,6 @@ class WindowContent(tk.Frame):
 
 			self.tax_tree.column(i, minwidth=0, width=max_width, stretch=False)
 
-
 		self.tax_tree.delete(*self.tax_tree.get_children())
 		for row in rows:
 			self.tax_tree.insert("", tk.END, values=row)
@@ -85,7 +85,6 @@ class WindowContent(tk.Frame):
 		self.query_field.insert(0, f"SELECT * FROM {selection}")
 	
 	def tableView(self):
-
 		tree_scroll_x = ttk.Scrollbar(self.table_frame, orient='horizontal')
 		tree_scroll_y = ttk.Scrollbar(self.table_frame,orient='vertical')
 
@@ -93,9 +92,7 @@ class WindowContent(tk.Frame):
 		tree_scroll_y.pack(side='left', fill='y')
 		
 		self.tax_tree = ttk.Treeview(self.table_frame, xscrollcommand=tree_scroll_x.set, yscrollcommand=tree_scroll_y.set,  show="headings",height=20)
-		
 		self.tax_tree.pack(side='top',fill='both',expand=True)
-
 
 		tree_scroll_x.config(command=self.tax_tree.xview)
 		tree_scroll_y.config(command=self.tax_tree.yview)
@@ -103,13 +100,28 @@ class WindowContent(tk.Frame):
 		self.updateTableView()	
 		
 	def optionsArea(self):
-		def executeQuery(query):
+		def _execute_query(query):
 			self.cursor.execute(query)
+			names = [description[0] for description in self.cursor.description]
 			rows=self.cursor.fetchall()
-			
-			self.query_output_field.delete(1.0, tk.END)
-			self.query_output_field.insert(tk.END, rows)
+			names = ', '.join(names)
 
+			self.query_output_field.delete(1.0, tk.END)
+			self.query_output_field.insert(tk.END, f"{names}\n")
+			for row in rows:
+				row_str = ', '.join([str(item) for item in row])
+				self.query_output_field.insert(tk.END, f"{row_str}\n")
+		
+		def _save_query_output():
+			file_types = [("Text", "*.txt"), ("Markdown", "*.md"), ("Comma Separated", "*.csv")]
+
+			filepath=asksaveasfilename(defaultextension=".txt", filetypes=file_types)
+			if not filepath:
+				return
+			
+			with open(filepath,"w") as file:
+				content=self.query_output_field.get(1.0, tk.END)
+				file.write(content)
 
 		tk.Label(self.option_frame,text="Choose Table").grid(column=1,row=0,sticky='nw',padx=10,pady=5)
 
@@ -124,7 +136,7 @@ class WindowContent(tk.Frame):
 		self.query_field=tk.Entry(self.option_frame,width=50)
 		self.query_field.grid(column=1,row=4,sticky='nwe',padx=10)
 
-		ttk.Button(self.option_frame,text="Execute Query",command=lambda: executeQuery(self.query_field.get())).grid(column=2,row=4,sticky='nwe',padx=10)
+		ttk.Button(self.option_frame,text="Execute Query",command=lambda: _execute_query(self.query_field.get())).grid(column=2,row=4,sticky='nwe',padx=10)
 		
 		y_scroll_text=ttk.Scrollbar(self.option_frame,orient='vertical')
 		y_scroll_text.grid(column=0,row=5,sticky='nes')
@@ -132,6 +144,9 @@ class WindowContent(tk.Frame):
 		self.query_output_field=tk.Text(self.option_frame,height=10)
 		self.query_output_field.config(yscrollcommand=y_scroll_text.set)
 		self.query_output_field.grid(column=1,row=5,sticky='nwes',padx=5,columnspan=2)
+
+		ttk.Button(self.option_frame, text="Save Output", command=lambda: _save_query_output()).grid(column=1,row=6,sticky='nwe',padx=10,columnspan=2)
+
 		
 		y_scroll_text.config(command=self.query_output_field.yview)
 
@@ -148,7 +163,9 @@ class WindowContent(tk.Frame):
 
 
 if __name__ == "__main__":
-	table_window=DatabaseInterface("[only for testing]")
+	from .setup import DB_FILE
+
+	table_window=DatabaseInterface(DB_FILE, "[only for testing]")
 	table_window.focus_set()
 	table_window.mainloop()
 
