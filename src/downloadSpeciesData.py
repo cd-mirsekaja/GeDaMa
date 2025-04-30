@@ -44,7 +44,7 @@ def restResponse(api_url: str):
 	except json.JSONDecodeError:
 		return None
 
-def speciesResponse(api_url: str, spec_id: str, rest_mod: str="", list_level: int=0, log_function=print, source: str=""):
+def specificResponse(api_url: str, spec_id: str, rest_mod: str="", list_level: int=0, log_function=print, source: str=""):
 	"""
 	Function for saving the server response for a species specific API call.
 
@@ -182,7 +182,7 @@ def getScientificNames(acc_numbers: list, log_function=print, stop_event=None):
 			log_function("\--- Search cancelled. ---\n")
 			return sci_names_dict
 		
-		dataset_response = speciesResponse(rest_URL, acc_number, rest_mod)
+		dataset_response = specificResponse(rest_URL, acc_number, rest_mod)
 		try:
 			sci_name = dataset_response["reports"][0]["organism"]["organism_name"]
 			sci_names_dict[acc_number] = sci_name
@@ -228,13 +228,10 @@ class GetInformation:
 		else:
 			self.accessionNumber = ""
 		
-		"""
 		if len(self.sciName.split()) < 2:
-			self.log_function(f"Scientific name {self.sciName} not valid. Skipping...")
-			raise ValueError("Scientific name not valid.")
+			self.log_function(f"Scientific name {self.sciName} not valid. Attempting search...")
 		else:
 			self.log_function(f"Downloading data for {self.sciName}...")
-		"""
 
 		self.response_dict = self.getResponses()
 	
@@ -250,7 +247,7 @@ class GetInformation:
 		"""
 		rest_URL = "https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/"
 		rest_mod = "/dataset_report"
-		dataset_response = speciesResponse(rest_URL, accessionNumber, rest_mod, log_function=self.log_function, source="NCBI")
+		dataset_response = specificResponse(rest_URL, accessionNumber, rest_mod, log_function=self.log_function, source="NCBI")
 		try:
 			sci_name = dataset_response["reports"][0]["organism"]["organism_name"]
 			self.log_function(f"{sci_name} found for {accessionNumber}")
@@ -348,7 +345,7 @@ class GetInformation:
 				self.log_function("No Accession Number found.")
 			
 		except Exception as e:
-			print(f"Error processing {self.sciName}: {str(e)}")
+			self.log_function(f"Error processing {self.sciName}: {str(e)}")
 			acc_number = ""
 
 		return acc_number
@@ -369,7 +366,7 @@ class GetInformation:
 		sciname_mod = '%20'.join(self.sciName.split())
 
 		def _general_vernaculars(platform: str, base_url: str, spec_id: str, rest_mod: str="", source: str=""):
-			response = speciesResponse(base_url, spec_id, rest_mod, log_function=self.log_function, source=source)
+			response = specificResponse(base_url, spec_id, rest_mod, log_function=self.log_function, source=source)
 
 			if response!=None:
 				if platform == "WORMS":
@@ -425,10 +422,10 @@ class GetInformation:
 
 		# combine all responses into a dictionary and return it
 		data_dict = {
-			"WORMS": speciesResponse(WORMS_url, sciname_mod, WORMS_mod, list_level=2, log_function=self.log_function, source="WoRMS"),
-			"GBIF": speciesResponse(GBIF_url, str(id_dict["GBIF-UsageKey"]), log_function=self.log_function, source="GBIF"),
-			"IRMNG": speciesResponse(IRMNG_url, sciname_mod, list_level=2, log_function=self.log_function, source="IRMNG"),
-			"PESI": speciesResponse(PESI_url, sciname_mod, list_level=1, log_function=self.log_function, source="PESI"),
+			"WORMS": specificResponse(WORMS_url, sciname_mod, WORMS_mod, list_level=2, log_function=self.log_function, source="WoRMS"),
+			"GBIF": specificResponse(GBIF_url, str(id_dict["GBIF-UsageKey"]), log_function=self.log_function, source="GBIF"),
+			"IRMNG": specificResponse(IRMNG_url, sciname_mod, list_level=2, log_function=self.log_function, source="IRMNG"),
+			"PESI": specificResponse(PESI_url, sciname_mod, list_level=1, log_function=self.log_function, source="PESI"),
 			"WORMS-Vernaculars": _general_vernaculars("WORMS", WORMS_vern_url, str(id_dict["AphiaID"]), source="WORMS-Vernaculars"),
 			"GBIF-Vernaculars": _general_vernaculars("GBIF", GBIF_url, str(id_dict["GBIF-UsageKey"]), GBIF_vern_mod, source="GBIF-Vernaculars"),
 			"Wikipedia-Vernaculars": _wikipedia_vernaculars(),
@@ -457,11 +454,11 @@ class GetInformation:
 		gbif_url = "https://api.gbif.org/v1/species?name="
 		gbif_mod = "&offset=0&limit=1"
 		
-		irmng_id = speciesResponse(irmng_url, sciname_mod, log_function=self.log_function, source="IRMNG-ID")
-		guid_id = speciesResponse(pesi_url, sciname_mod, log_function=self.log_function, source="PESI-ID")
-		aphia_id = speciesResponse(worms_url, sciname_mod, worms_mod, log_function=self.log_function, source="WORMS-ID")
+		irmng_id = specificResponse(irmng_url, sciname_mod, log_function=self.log_function, source="IRMNG-ID")
+		guid_id = specificResponse(pesi_url, sciname_mod, log_function=self.log_function, source="PESI-ID")
+		aphia_id = specificResponse(worms_url, sciname_mod, worms_mod, log_function=self.log_function, source="WORMS-ID")
 		try:
-			gbif_usageKey = speciesResponse(gbif_url, sciname_mod, gbif_mod, log_function=self.log_function, source="WORMS-ID")["results"][0]["key"]
+			gbif_usageKey = specificResponse(gbif_url, sciname_mod, gbif_mod, log_function=self.log_function, source="WORMS-ID")["results"][0]["key"]
 		except:
 			gbif_usageKey = ""
 
@@ -836,16 +833,18 @@ class ResolveData:
 		out_dict = {}
 		# iterate through taxonomy dict
 		for main_key in main_keys:
-			# set output dict values to values of current sub dictionary
+			# iterate over keys and only replace values if they are not already set
 			try:
-				out_dict = {key: tax_dict[main_key][key] for key in keys}
+				for key in keys:
+					if not out_dict.get(key):  # only replace if no value is set
+						out_dict[key] = tax_dict[main_key].get(key, "")
 			except KeyError:
 				continue
 
-			# if all values of current dictionary are empty, continue. else, break out of for loop
+			# if all values of current dictionary are filled, break out of the loop
 			if all(out_dict.values()):
 				break
-
+		
 		return(out_dict)
 	
 	def resolveVernaculars(self):

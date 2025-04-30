@@ -89,6 +89,23 @@ def remove_nestings(input_list: list, output_list: list):
 			output_list.append(i)
 	return(output_list)
 
+def count_entries(db_file: str):
+	"""
+	Counts the number of entries in the database.
+
+	Args:
+		db_file (str): Path to the SQLite database file.
+
+	Returns:
+		int: Number of entries in the database.
+	"""
+	db_conn = sqlite3.connect(db_file)
+	c = db_conn.cursor()
+	c.execute("SELECT COUNT(*) FROM taxonomy")
+	count = c.fetchone()[0]
+	db_conn.close()
+	return count
+
 class CreateDatabase():
 	def __init__(self, value_dict: dict, db_file: str, log_function=print, stop_event=None):
 		"""

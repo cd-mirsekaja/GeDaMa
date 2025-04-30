@@ -88,102 +88,116 @@ class WindowContent(tk.Frame):
 		self.delim_selector = tk.StringVar()
 		self.delim_selector.set(";")
 
-
 		self.button_frame_left = ttk.Frame(self.options_frame)
 		self.button_frame_left.pack(side = "bottom", fill = "x", pady = 10)
 
-		self.save_db_onoff = tk.IntVar()
-		ttk.Checkbutton(self.general_options_frame, text = "Save output to database file", variable = self.save_db_onoff, onvalue = 1, offvalue = 0,
-				command=lambda: _switch_state(append_check, self.save_db_onoff))
-		self.save_db_onoff.set(1)
+		# widgets for choosing output saving parameters
+		def _output_options():
+			self.output_opt_frame = ttk.Frame(self.general_options_frame)
 
-		self.db_append_onoff = tk.IntVar()
-		append_check=ttk.Checkbutton(self.general_options_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
-		self.db_append_onoff.set(1)
+			self.save_db_onoff = tk.IntVar()
+			ttk.Checkbutton(self.output_opt_frame, text = "Save output to database file", variable = self.save_db_onoff, onvalue = 1, offvalue = 0,
+					command=lambda: _switch_state(append_check, self.save_db_onoff))
+			self.save_db_onoff.set(1)
 
-		"""
-		self.itemsort_onoff = tk.IntVar()
-		ttk.Checkbutton(self.general_options_frame, text = "Sort output alphabetically", variable = self.itemsort_onoff, onvalue = 1, offvalue = 0)
-		self.itemsort_onoff.set(1)
-		"""
+			self.db_append_onoff = tk.IntVar()
+			append_check=ttk.Checkbutton(self.output_opt_frame, text = "Append output to existing database", variable = self.db_append_onoff, onvalue = 1, offvalue = 0)
+			self.db_append_onoff.set(1)
 
-		# widgets for sorting the output
-		ttk.Label(self.general_options_frame, text = "Sort output by:")
-		sorting_options = [None, 'Accession Numbers', 'Scientific Names']
-		self.sorting_selection = tk.StringVar()
-		self.sorting_selection.set(sorting_options[0])
-		tk.OptionMenu(self.general_options_frame, self.sorting_selection, *sorting_options)
+			"""
+			self.itemsort_onoff = tk.IntVar()
+			ttk.Checkbutton(self.general_options_frame, text = "Sort output alphabetically", variable = self.itemsort_onoff, onvalue = 1, offvalue = 0)
+			self.itemsort_onoff.set(1)
+			"""
+
+			# widgets for sorting the output
+			ttk.Label(self.output_opt_frame, text = "Sort output by:")
+			sorting_options = [
+				None,
+				'Accession Numbers',
+				'Scientific Names',
+				]
+			self.sorting_selection = tk.StringVar()
+			self.sorting_selection.set(sorting_options[0])
+			tk.OptionMenu(self.output_opt_frame, self.sorting_selection, *sorting_options)
+
+		# widgets for choosing additional search parameters
+		def _search_options():
+			self.search_opt_frame = ttk.Frame(self.general_options_frame)
+			self.ncbi_search_onoff = tk.IntVar()
+			self.ncbi_search_button = ttk.Checkbutton(self.search_opt_frame, text = "Search for NCBI Accession Numbers",
+					variable = self.ncbi_search_onoff, onvalue = 1, offvalue = 0)
+			self.ncbi_search_onoff.set(1)
 		
-		ttk.Separator(self.general_options_frame)
-
-		self.ncbi_search_onoff = tk.IntVar()
-		self.ncbi_search_button = ttk.Checkbutton(self.general_options_frame, text = "Search for NCBI Accession Numbers",
-				variable = self.ncbi_search_onoff, onvalue = 1, offvalue = 0)
-		self.ncbi_search_onoff.set(1)
-
-		ttk.Separator(self.general_options_frame)
-
 		# widgets for choosing the input method
-		def _select_input():
-			[_switch_state(radio, self.inputmethod_selection, trigger="Both_On") for radio in self.radiobuttons.values()]
-			sel_input = self.inputmethod_selection.get()
-			if sel_input == "Both_On":
-				self.sorting_selection.set(None)
-				self.text_frame.configure(text = f"Enter values as Number{self.delim_selector.get()}Name")
-			elif sel_input == "Both_Off":
-				self.inputmethod_selection.set(self.input_list[0])
-				self.sorting_selection.set(self.input_list[0])
-				self.text_frame.configure(text = f"Enter list of {self.inputmethod_selection.get()}")
-			else:
-				self.text_frame.configure(text = f"Enter list of {self.inputmethod_selection.get()}")
-				self.sorting_selection.set(sel_input)
-			_switch_state(self.ncbi_search_button, self.inputmethod_selection, trigger="Accession Numbers")
+		def _input_options():
+			def _select_input():
+				[_switch_state(radio, self.inputmethod_selection, trigger="Both_On") for radio in self.radiobuttons.values()]
+				sel_input = self.inputmethod_selection.get()
+				if sel_input == "Both_On":
+					self.sorting_selection.set(None)
+					self.text_frame.configure(text = f"Enter values as Number{self.delim_selector.get()}Name")
+				elif sel_input == "Both_Off":
+					self.inputmethod_selection.set(self.input_list[0])
+					self.sorting_selection.set(self.input_list[0])
+					self.text_frame.configure(text = f"Enter list of {self.inputmethod_selection.get()}")
+				else:
+					self.text_frame.configure(text = f"Enter list of {self.inputmethod_selection.get()}")
+					self.sorting_selection.set(sel_input)
+				_switch_state(self.ncbi_search_button, self.inputmethod_selection, trigger="Accession Numbers")
+				[_switch_state(combo, self.inputmethod_selection, trigger="Both_Off") for combo in self.comboboxes.values()]
+				
+			self.input_opt_frame = ttk.Labelframe(self.general_options_frame, text = "Select input method:")
+			self.input_list = [
+				"Accession Numbers",
+				"Scientific Names",
+				"Both_On",
+				"Both_Off"
+			]
 			
-		
-		#ttk.Label(self.general_options_frame, text = "Select input method:")
-		self.input_method_frame = ttk.Labelframe(self.general_options_frame, text = "Select input method:")
-		self.input_list = [
-			"Accession Numbers",
-			"Scientific Names",
-			"Both_On",
-			"Both_Off"
-		]
-		self.inputmethod_selection = tk.StringVar()
-		self.inputmethod_selection.set(self.input_list[2])
-		self.radiobuttons = {}
-		ttk.Checkbutton(self.input_method_frame, text = "Both values", variable=self.inputmethod_selection, onvalue="Both_On", offvalue="Both_Off",
-				command=lambda: _select_input())
-		
-		self.radiobuttons[self.input_list[0]] = ttk.Radiobutton(self.input_method_frame, text = self.input_list[0],
-				variable = self.inputmethod_selection, value = self.input_list[0], command = lambda: _select_input())
-		self.radiobuttons[self.input_list[1]] = ttk.Radiobutton(self.input_method_frame, text = self.input_list[1],
-				variable = self.inputmethod_selection, value = self.input_list[1], command = lambda: _select_input())
-		_select_input()
+			self.inputmethod_selection = tk.StringVar()
+			self.inputmethod_selection.set(self.input_list[2])
+			self.radiobuttons, self.comboboxes = {}, {}
+			ttk.Checkbutton(self.input_opt_frame, text = "Both values", variable=self.inputmethod_selection, onvalue="Both_On", offvalue="Both_Off",
+					command=lambda: _select_input())
+			
+			self.radiobuttons[self.input_list[0]] = ttk.Radiobutton(self.input_opt_frame, text = self.input_list[0],
+					variable = self.inputmethod_selection, value = self.input_list[0], command = lambda: _select_input())
+			self.radiobuttons[self.input_list[1]] = ttk.Radiobutton(self.input_opt_frame, text = self.input_list[1],
+					variable = self.inputmethod_selection, value = self.input_list[1], command = lambda: _select_input())
+			_select_input()
 
+			ttk.Separator(self.input_opt_frame)
+
+			# widgets for choosing the item delimiter
+			ttk.Label(self.input_opt_frame, text = "Set item delimiter:")
+			delim_tuple = (
+				";",
+				",",
+				"|"
+			)
+			self.comboboxes["delimiter"] = ttk.Combobox(self.input_opt_frame, textvariable = self.delim_selector)
+			self.comboboxes["delimiter"]["values"] = delim_tuple
+			self.comboboxes["delimiter"].current(0)
+
+
+		# call the functions for widget creation
+		_output_options()
 		ttk.Separator(self.general_options_frame)
+		_search_options()
+		ttk.Separator(self.general_options_frame)
+		_input_options()
 
-		# widgets for choosing the item delimiter
-		ttk.Label(self.general_options_frame, text = "Set item delimiter:")
-		delim_tuple = (
-			";",
-			",",
-			"|"
-		)
-		choose_delimiter = ttk.Combobox(self.general_options_frame, textvariable = self.delim_selector)
-		choose_delimiter["values"] = delim_tuple
-		choose_delimiter.current(0)
 
 		# place all general options widgets on the interface
 		for widget in self.general_options_frame.winfo_children():
-			frame_name = ".!frame.!labelframe.!frame"
-			if f"{frame_name}.!labelframe" in str(widget):
-				widget.pack(fill="both", padx=10, pady=5)
+			if widget.winfo_class() == "TFrame" or widget.winfo_class() == "TLabelframe":
+				widget.pack(fill="both", padx=10, pady=5, expand=True)
 				for sub_widget in widget.winfo_children():
-					sub_widget.pack(fill = "x", padx = 10, pady = 2.5)
-			elif f"{frame_name}.!label" in str(widget):
-				widget.pack(fill = "x", padx = 10, pady = 0, side="top")
-			elif f"{frame_name}.!checkbutton" in str(widget):
-				widget.pack(fill = "x", padx = 10, pady = 2.5, side="top")
+					if sub_widget.winfo_class() == "TLabel":
+						sub_widget.pack(fill = "x", padx = 10, pady = 2.5, side="left")
+					else:
+						sub_widget.pack(fill = "x", padx = 10, pady = 2.5)
 			else:
 				widget.pack(fill = "x", padx = 10, pady = 5)
 
